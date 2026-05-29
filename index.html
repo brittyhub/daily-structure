@@ -689,27 +689,41 @@
           <div style={{ background: C.ink, padding: "20px 24px 0", position: "sticky", top: 0, zIndex: 10 }}>
             <div style={{ fontSize: 11, letterSpacing: "0.18em", color: C.muted,
               textTransform: "uppercase", marginBottom: 4 }}>Daily Structure</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button onClick={() => setDayOffset(o => Math.max(0,o-1))} style={{
-                background: "none", border: "none",
-                color: dayOffset > 0 ? C.muted : "transparent",
-                cursor: dayOffset > 0 ? "pointer" : "default",
-                fontSize: 24, padding: 0, lineHeight: 1 }}>‹</button>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 20, color: C.cream, fontStyle: "italic", letterSpacing: "-0.02em" }}>
-                  {viewDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
-                </div>
-                {!isToday && (
-                  <div style={{ fontSize: 11, color: C.terracotta, letterSpacing: "0.08em", marginTop: 1 }}>
-                    {dayOffset === 1 ? "Tomorrow" : `In ${dayOffset} days`}
-                  </div>
-                )}
+            <div>
+              <div style={{ fontSize: 20, color: C.cream, fontStyle: "italic", letterSpacing: "-0.02em" }}>
+                {viewDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
               </div>
+              {!isToday && (
+                <div style={{ fontSize: 11, color: C.terracotta, letterSpacing: "0.08em", marginTop: 1 }}>
+                  {dayOffset === 1 ? "Tomorrow" : `In ${dayOffset} days`}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 0, marginTop: 10, borderRadius: 10,
+              overflow: "hidden", border: `1px solid rgba(255,255,255,0.12)` }}>
+              <button onClick={() => setDayOffset(o => Math.max(0,o-1))} style={{
+                flex: 1, background: dayOffset > 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                border: "none", color: dayOffset > 0 ? C.cream : "rgba(255,255,255,0.2)",
+                cursor: dayOffset > 0 ? "pointer" : "default",
+                fontSize: 18, padding: "10px 0", fontFamily: "inherit",
+                borderRight: "1px solid rgba(255,255,255,0.12)" }}>
+                ‹ Back
+              </button>
+              <button onClick={() => setDayOffset(0)} style={{
+                flex: 1, background: isToday ? C.terracotta+"44" : "rgba(255,255,255,0.08)",
+                border: "none", color: isToday ? C.terracotta : C.muted,
+                cursor: "pointer", fontSize: 12, padding: "10px 0",
+                fontFamily: "inherit", letterSpacing: "0.08em",
+                borderRight: "1px solid rgba(255,255,255,0.12)" }}>
+                TODAY
+              </button>
               <button onClick={() => setDayOffset(o => Math.min(6,o+1))} style={{
-                background: "none", border: "none",
-                color: dayOffset < 6 ? C.muted : "transparent",
+                flex: 1, background: dayOffset < 6 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                border: "none", color: dayOffset < 6 ? C.cream : "rgba(255,255,255,0.2)",
                 cursor: dayOffset < 6 ? "pointer" : "default",
-                fontSize: 24, padding: 0, lineHeight: 1 }}>›</button>
+                fontSize: 18, padding: "10px 0", fontFamily: "inherit" }}>
+                Next ›
+              </button>
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 14, paddingBottom: 16 }}>
               {["Today","Tasks","Routines","Joy"].map((t,i) => (
