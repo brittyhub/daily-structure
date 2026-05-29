@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Daily Structure">
+  <title>Daily Structure</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { min-height: 100%; background: #F5F0E8; }
+    body { overscroll-behavior: none; }
+    input, button, textarea { -webkit-appearance: none; }
+    input[type="date"] { -webkit-appearance: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // localStorage shim matching Claude's window.storage API
+    window.storage = {
+      get: function(key) {
+        try {
+          var val = localStorage.getItem('ds_' + key);
+          if (val === null) return Promise.reject(new Error('not found'));
+          return Promise.resolve({ value: val });
+        } catch(e) { return Promise.reject(e); }
+      },
+      set: function(key, value) {
+        try {
+          localStorage.setItem('ds_' + key, typeof value === 'string' ? value : String(value));
+          return Promise.resolve({ key: key, value: value });
+        } catch(e) { return Promise.reject(e); }
+      }
+    };
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const C = {
+      cream: "#F5F0E8", ink: "#1A1714", warm: "#8B7355",
+      terracotta: "#C4714A", sage: "#7A8C6E", dustyRose: "#C49A8A",
+      gold: "#C4A45A", muted: "#B8AFA4", cardBg: "#FDFAF5", border: "#E8E0D4",
+      purple: "#7A5C8A", steel: "#5A7A8C", red: "#B94040",
+    };
+
+    const CAT_COLOR = {
+      anchor: "#8B7355", workout: "#7A5C8A", work: "#7A8C6E",
+      urgent: "#C4714A", out: "#5A7A8C", sleep: "#4A5568",
+    };
+
+    const PRIORITY_CONFIG = {
+      high: { label: "High", color: "#B94040", bg: "#B9404018" },
+      mid:  { label: "Mid",  color: "#8B7355", bg: "#8B735518" },
+      low:  { label: "Low",  color: "#B8AFA4", bg: "#B8AFA418" },
+    };
+
+    const HAIR_PROTOCOLS = {
+      A: {
+        label: "Reset + Volume", tag: "Wash A",
+        subtitle: "1x per week — clarifying wash", color: "#7A5C8A",
+        sections: [
+          { heading: "Before Shower", items: [
+            "EverPure Bond Repair Pre-Shampoo — mids + ends only",
+            "Leave on 10 minutes before stepping in",
+          ]},
+          { heading: "Shampoo", items: [
+            "L'Oreal Clarify shampoo",
+            "Double cleanse if lots of dry shampoo buildup",
+          ]},
+          { heading: "Condition", items: [
+            "Pantene Grow Abundant conditioner — mids/ends only",
+          ]},
+          { heading: "Post-Wash", items: [
+            "IGK Good Behavior spray",
+            "Elvive Glycolic Leave-In — small amount, mostly ends",
+          ]},
+          { heading: "Style", items: ["Shark FlexStyle / Airwrap"] },
+          { heading: "Tonight — don't forget", items: [
+            "Fleur serum on scalp before bed <- set a reminder!",
+          ]},
+        ],
+      },
+      B: {
+        label: "Softness + Strength", tag: "Wash B",
+        subtitle: "2-4 days after Wash A", color: "#C4714A",
+        sections: [
+          { heading: "Shampoo", items: ["Pantene Grow Abundant shampoo"] },
+          { heading: "Conditioning — choose ONE (not both)", items: [
+            "Blake Brown mask <- recommended for you cosmetically",
+            "Trader Joe's mask — alternative",
+          ]},
+          { heading: "Post-Wash", items: [
+            "IGK Good Behavior spray",
+            "Elvive Glycolic serum — tiny amount on ends only",
+          ]},
+          { heading: "Tonight — don't forget", items: [
+            "Fleur serum on scalp before bed <- set a reminder!",
+          ]},
+        ],
+      },
+      C: {
+        label: "Good Hair Day", tag: "Wash C",
+        subtitle: "Optional — going out / glossy hair", color: "#C4A45A",
+        sections: [
+          { heading: "Shampoo", items: ["Pantene shampoo"] },
+          { heading: "Condition", items: ["Light conditioner only"] },
+          { heading: "Gloss", items: ["Playa Gloss Rinse"] },
+        ],
+      },
+    };
+
+    const DETAIL_VIEWS = {
+      "shower-basic": {
+        title: "Basic Shower", emoji: "🚿",
+        sections: [{ heading: "Steps", items: [
+          "Shower — body wash, rinse thoroughly",
+          "Thorough body dry — take your time, don't skip!",
+          "Deodorant", "Body lotion — all over",
+          "Hair products applied to damp hair",
+          "Blow dry hair", "Get dressed",
+        ]}],
+      },
+      "breakfast": {
+        title: "Breakfast Sequence", emoji: "🍳",
+        sections: [{ heading: "In this order", items: [
+          "Check time — has 30-60 min passed since meds?",
+          "Fill 32oz water bottle with vitamin powder",
+          "Drink at least 8oz of water first",
+          "Take vitamins WITH food — eat immediately after",
+          "Make coffee",
+          "Phone face down if eating at the table",
+        ]}],
+      },
+      "work-start": {
+        title: "Getting to Desk", emoji: "💻",
+        sections: [{ heading: "Before opening a browser", items: [
+          "Unload dishwasher — bridge task, gets you moving",
+          "Water bottle at desk",
+          "Phone in another room or face down, silenced",
+          "Open Things — what is the ONE task for this block?",
+          "Close unnecessary tabs before starting",
+          "No social media until first work block is done",
+        ]}],
+      },
+      "water": {
+        title: "Water Check-ins", emoji: "💧",
+        sections: [{ heading: "Daily targets", items: [
+          "Bottle #1 — finished by noon",
+          "Bottle #2 — finished by 3pm snack",
+          "Bottle #3 — finished by dinner",
+          "Total goal: ~100oz across the day",
+        ]}],
+      },
+      "night": {
+        title: "Night Routine", emoji: "🌙",
+        sections: [{ heading: "End of day", items: [
+          "Load and run dishwasher", "Brush teeth",
+          "PM skincare — full routine",
+          "Check if tomorrow needs a hair wash — prep accordingly",
+          "Phone on charger — lights out alarm at 11:55",
+        ]}],
+      },
+      "workout": {
+        title: "Workout Options", emoji: "💜",
+        sections: [
+          { heading: "Treadmill (30 min)", items: [
+            "Queue up NPR news podcast before starting",
+            "30 min run / walk / intervals", "Cool down 2-3 min",
+          ]},
+          { heading: "Infinity Hoop", items: [
+            "Clear space — check Adam isn't in there",
+            "Music or podcast on", "20-30 min session",
+          ]},
+        ],
+      },
+    };
+
+    const b = (time, label, cat, note, detail, isHairWash) =>
+      ({ time, label, cat, note: note||null, detail: detail||null, isHairWash: !!isHairWash });
+
+    const MORNING_BASIC = [
+      b("8:00",  "Wake up + out of bed",                        "anchor",  "Feet on floor. No phone."),
+      b("8:05",  "Brush teeth · skincare · medication",          "anchor",  "Clock starts — 30-60 min before eating"),
+      b("8:15",  "Workout — treadmill or hoop",                  "workout", null, "workout"),
+      b("8:55",  "Shower + dry + hair + get dressed",            "anchor",  null, "shower-basic"),
+      b("9:35",  "Breakfast — water → vitamins → food → coffee", "anchor",  "This order matters.", "breakfast"),
+      b("9:50",  "Unload dishwasher → to desk",                  "anchor",  null, "work-start"),
+    ];
+
+    const MORNING_HAIRWASH = [
+      b("8:00",  "Wake up + out of bed",                        "anchor",  "Feet on floor. No phone."),
+      b("8:05",  "Brush teeth · skincare · medication",          "anchor",  "Clock starts — 30-60 min before eating"),
+      b("8:15",  "Workout — treadmill or hoop",                  "workout", null, "workout"),
+      b("8:55",  "Hair wash shower + dry + style + get dressed", "anchor",  null, "hair-wash", true),
+      b("9:35",  "Breakfast — water → vitamins → food → coffee", "anchor",  "This order matters.", "breakfast"),
+      b("9:50",  "Unload dishwasher → to desk",                  "anchor",  null, "work-start"),
+    ];
+
+    const SCHEDULE = {
+      0: { label: "Sunday", note: "Loose structure — weekend with Adam", blocks: [
+        b("8:00",  "Wake up + meds + skincare",  "anchor", "30-60 min before eating"),
+        b("9:00",  "Breakfast + vitamins",         "anchor", "Water → vitamins with food → coffee", "breakfast"),
+        b("11:00", "PM skincare",                  "anchor", null, "night"),
+        b("11:55", "Lights out",                   "sleep",  "Put the phone down."),
+      ]},
+      1: { label: "Monday", note: "Lighter focus day — Adam home", blocks: [
+        ...MORNING_BASIC,
+        b("10:00", "Job search — browse + triage listings", "work",   "Set a timer. Don't let this swallow the day."),
+        b("11:00", "Life admin block",                       "work",   "Pick ONE task and complete or advance it"),
+        b("11:30", "Job application",                        "work",   "Goal: submitted before leaving the house"),
+        b("12:30", "Out of house — errand or appointment",  "out"),
+        b("2:30",  "Afternoon work block",                  "work"),
+        b("3:00",  "Snack break",                            "anchor", "Check water — bottle #2 by now?", "water"),
+        b("7:30",  "Dinner",                                 "anchor", "Adam cooks. Stay out of the kitchen."),
+        b("11:00", "PM skincare + wind down",                "anchor", null, "night"),
+        b("11:55", "Lights out",                             "sleep",  "Put the phone down."),
+      ]},
+      2: { label: "Tuesday", note: "Deep focus day — Adam in office", blocks: [
+        ...MORNING_BASIC,
+        b("10:00", "FREELANCE ARTICLE — deep writing block", "urgent", "Phone in another room. Let it run."),
+        b("1:00",  "Break — get up, move, snack if hungry",  "anchor", null, "water"),
+        b("1:15",  "Job application — deep focus",           "work"),
+        b("2:15",  "Break",                                  "anchor", "Move around."),
+        b("2:30",  "Job application #2 or article overflow", "work"),
+        b("3:00",  "Snack break",                            "anchor", "Check water.", "water"),
+        b("4:00",  "Job search triage",                      "work"),
+        b("7:30",  "Dinner",                                 "anchor", "Adam cooks. Stay out of the kitchen."),
+        b("8:30",  "Evening workout",                        "workout","Optional if skipped this morning", "workout"),
+        b("11:00", "PM skincare + wind down",                "anchor", null, "night"),
+        b("11:55", "Lights out",                             "sleep",  "Put the phone down."),
+      ]},
+      3: { label: "Wednesday", note: "Deep focus day — Adam in office · Hair wash day", blocks: [
+        ...MORNING_HAIRWASH,
+        b("10:00", "FREELANCE ARTICLE — deep writing block", "urgent", "Phone in another room."),
+        b("1:00",  "Break — get up, move, snack if hungry",  "anchor", null, "water"),
+        b("1:15",  "Job application — deep focus",           "work"),
+        b("2:15",  "Break",                                  "anchor"),
+        b("2:30",  "Personal project or overflow",           "work"),
+        b("3:00",  "Snack break",                            "anchor", "Check water.", "water"),
+        b("4:00",  "Life admin or appointment",              "out"),
+        b("7:30",  "Dinner",                                 "anchor", "Adam cooks. Stay out of the kitchen."),
+        b("11:00", "PM skincare + wind down",                "anchor", null, "night"),
+        b("11:55", "Lights out",                             "sleep",  "Put the phone down."),
+      ]},
+      4: { label: "Thursday", note: "Deep focus day — Adam in office", blocks: [
+        ...MORNING_BASIC,
+        b("10:00", "FREELANCE ARTICLE or job application — assess priority", "urgent"),
+        b("1:00",  "Break — get up, move, snack if hungry",  "anchor", null, "water"),
+        b("1:15",  "Job application — deep focus",           "work"),
+        b("2:15",  "Break",                                  "anchor"),
+        b("2:30",  "Office organization — ONE small task",  "work",   "Not 'clean the office.' One specific tiny thing."),
+        b("3:00",  "Snack break",                            "anchor", "Check water.", "water"),
+        b("3:30",  "Job search triage",                      "work"),
+        b("7:30",  "Dinner",                                 "anchor", "Adam cooks. Stay out of the kitchen."),
+        b("8:30",  "Evening workout",                        "workout","Optional if skipped this morning", "workout"),
+        b("11:00", "PM skincare + wind down",                "anchor", null, "night"),
+        b("11:55", "Lights out",                             "sleep",  "Put the phone down."),
+      ]},
+      5: { label: "Friday", note: "Reset day — Adam home · Weekend prep", blocks: [
+        ...MORNING_HAIRWASH,
+        b("10:00", "Job search + one application",  "work",   "Get it done before you head out."),
+        b("11:30", "Weekly reset + planning",       "work",   "Tidy desk · update Things · check Rodeo · mention events to Adam"),
+        b("12:30", "Out of house — errand or cafe treat", "out", "You've earned it."),
+        b("2:30",  "Flex afternoon",                "out"),
+        b("3:00",  "Snack break",                   "anchor", "Check water.", "water"),
+        b("7:30",  "Dinner",                        "anchor", "Adam cooks. Stay out of the kitchen."),
+        b("11:00", "PM skincare + wind down",       "anchor", null, "night"),
+        b("11:55", "Lights out",                    "sleep",  "Put the phone down."),
+      ]},
+      6: { label: "Saturday", note: "Loose structure — weekend with Adam", blocks: [
+        b("8:00",  "Wake up + meds + skincare",  "anchor", "30-60 min before eating"),
+        b("9:00",  "Breakfast + vitamins",         "anchor", "Water → vitamins with food → coffee", "breakfast"),
+        b("11:00", "PM skincare",                  "anchor", null, "night"),
+        b("11:55", "Lights out",                   "sleep",  "Put the phone down."),
+      ]},
+    };
+
+    const DEFAULT_JOY = [
+      { id: "j1",  text: "Check Rodeo for upcoming events worth adding to the calendar" },
+      { id: "j2",  text: "Look up new album releases this week" },
+      { id: "j3",  text: "Check if any exhibitions or shows are closing soon" },
+      { id: "j4",  text: "Find a book to start next — check your reading list" },
+      { id: "j5",  text: "Scan concert listings — anything worth proposing to Adam?" },
+      { id: "j6",  text: "Check saved restaurants or cafes you've been meaning to try" },
+      { id: "j7",  text: "Find a fun local errand to attach to Friday's outing" },
+      { id: "j8",  text: "Read one saved newsletter or Substack" },
+      { id: "j9",  text: "Text a friend you've been meaning to catch up with" },
+      { id: "j10", text: "Browse a bookstore site — wishlisting only, no buying" },
+      { id: "j11", text: "Do a crossword or word game" },
+      { id: "j12", text: "Put on an album and actually listen to it, start to finish" },
+      { id: "j13", text: "Flip through a magazine or coffee table book" },
+      { id: "j14", text: "Plan a future trip or day out, even just a daydream version" },
+    ];
+
+    const todayKey = () => new Date().toISOString().split("T")[0];
+    const addDays  = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r; };
+    const dateKey  = (d) => d.toISOString().split("T")[0];
+
+    function dailyJoyNudge(joyItems) {
+      if (!joyItems.length) return null;
+      const seed = new Date().toISOString().split("T")[0].replace(/-/g,"");
+      const idx  = parseInt(seed) % joyItems.length;
+      return joyItems[idx];
+    }
+
+    function HairCycleBadge({ lastHairWash, compact }) {
+      const next = lastHairWash === "A" ? "B" : lastHairWash === "B" ? "A" : "A";
+      const proto = HAIR_PROTOCOLS[next];
+      if (compact) {
+        return (
+          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10,
+            background: proto.color + "22", color: proto.color, fontWeight: "bold",
+            letterSpacing: "0.06em", marginLeft: 6 }}>
+            {proto.tag}
+          </span>
+        );
+      }
+      return (
+        <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6,
+          background: proto.color + "18", borderRadius: 10, padding: "3px 10px" }}>
+          <span style={{ fontSize: 11, color: proto.color, fontWeight: "bold" }}>{proto.tag}</span>
+          <span style={{ fontSize: 10, color: C.muted }}>{proto.label}</span>
+        </div>
+      );
+    }
+
+    function IntentionPrompt({ value, onChange }) {
+      const [editing, setEditing] = useState(!value);
+      const [draft, setDraft] = useState(value || "");
+      const save = () => { if (draft.trim()) { onChange(draft.trim()); setEditing(false); } };
+      return (
+        <div style={{ background: C.ink, borderRadius: 14, padding: "14px 16px", marginBottom: 20 }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.14em", color: C.muted, textTransform: "uppercase", marginBottom: 8 }}>
+            Today's one thing
+          </div>
+          {editing ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && save()}
+                placeholder="What matters most today?"
+                style={{ flex: 1, background: "rgba(255,255,255,0.08)", border: "none",
+                  borderBottom: `1px solid ${C.warm}`, padding: "6px 0", color: C.cream,
+                  fontFamily: "inherit", fontSize: 14, fontStyle: "italic", outline: "none" }} />
+              <button onClick={save} style={{ background: C.terracotta, color: "#fff", border: "none",
+                borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontFamily: "Georgia, serif" }}>
+                Set
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ fontSize: 15, color: C.cream, fontStyle: "italic", lineHeight: 1.4 }}>{value}</div>
+              <button onClick={() => { setDraft(value); setEditing(true); }} style={{
+                background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, padding: 0, flexShrink: 0 }}>
+                edit
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function EveningNudge({ joyItems }) {
+      const hour = new Date().getHours();
+      if (hour < 17 || !joyItems.length) return null;
+      const nudge = dailyJoyNudge(joyItems);
+      if (!nudge) return null;
+      return (
+        <div style={{ background: C.dustyRose+"22", border: `1px solid ${C.dustyRose+"60"}`,
+          borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+            color: C.dustyRose, marginBottom: 6 }}>✨ Tonight's joy nudge</div>
+          <div style={{ fontSize: 14, color: C.ink, fontStyle: "italic", lineHeight: 1.4 }}>
+            {nudge.text}
+          </div>
+        </div>
+      );
+    }
+
+    function BottomSheet({ content, onClose, lastHairWash, setLastHairWash }) {
+      const [hairType, setHairType] = useState(null);
+      useEffect(() => {
+        if (content === "hair-wash") {
+          setHairType(lastHairWash === "A" ? "B" : lastHairWash === "B" ? "A" : "A");
+        }
+      }, [content, lastHairWash]);
+
+      if (!content) return null;
+      const isHair = content === "hair-wash";
+      const proto  = isHair && hairType ? HAIR_PROTOCOLS[hairType] : null;
+      const detail = !isHair ? DETAIL_VIEWS[content] : null;
+
+      const handleSelectHair = (type) => {
+        setHairType(type);
+        setLastHairWash(type);
+        window.storage.set("ds-lasthairwash", type).catch(() => {});
+      };
+
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100 }}>
+          <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(26,23,20,0.55)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: C.cream,
+            borderRadius: "20px 20px 0 0", maxHeight: "84vh", overflowY: "auto",
+            boxShadow: "0 -8px 40px rgba(0,0,0,0.18)" }}>
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border }} />
+            </div>
+            <div style={{ padding: "4px 20px 40px" }}>
+              {isHair && (
+                <div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.14em", color: C.muted,
+                    textTransform: "uppercase", marginBottom: 14 }}>Hair Wash Protocol</div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                    {Object.entries(HAIR_PROTOCOLS).map(([key, p]) => (
+                      <button key={key} onClick={() => handleSelectHair(key)} style={{
+                        flex: 1, padding: "10px 6px", borderRadius: 10,
+                        border: `1.5px solid ${hairType === key ? p.color : C.border}`,
+                        background: hairType === key ? p.color + "18" : C.cardBg,
+                        cursor: "pointer", fontFamily: "Georgia, serif" }}>
+                        <div style={{ fontSize: 11, fontWeight: "bold", color: p.color, letterSpacing: "0.06em" }}>{p.tag}</div>
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 2, lineHeight: 1.3 }}>{p.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                  {proto && (
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", marginBottom: 16 }}>
+                        {proto.subtitle}
+                        {lastHairWash && (
+                          <span style={{ color: proto.color, marginLeft: 8 }}>
+                            (last: {HAIR_PROTOCOLS[lastHairWash] && HAIR_PROTOCOLS[lastHairWash].tag})
+                          </span>
+                        )}
+                      </div>
+                      {proto.sections.map((sec, si) => (
+                        <div key={si} style={{ marginBottom: 16 }}>
+                          <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+                            color: C.muted, marginBottom: 8 }}>{sec.heading}</div>
+                          {sec.items.map((item, ii) => (
+                            <div key={ii} style={{ display: "flex", gap: 10, padding: "8px 0",
+                              borderBottom: `1px solid ${C.border}`, alignItems: "flex-start" }}>
+                              <div style={{ width: 5, height: 5, borderRadius: "50%", background: proto.color,
+                                marginTop: 6, flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, lineHeight: 1.45, color: C.ink }}>{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {detail && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 22 }}>{detail.emoji}</span>
+                    <span style={{ fontSize: 18, fontStyle: "italic" }}>{detail.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", marginBottom: 16 }}>
+                    Reference only — read, do the thing, check the block above.
+                  </div>
+                  {detail.sections.map((sec, si) => (
+                    <div key={si} style={{ marginBottom: 16 }}>
+                      {sec.heading && (
+                        <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+                          color: C.muted, marginBottom: 8 }}>{sec.heading}</div>
+                      )}
+                      {sec.items.map((item, ii) => (
+                        <div key={ii} style={{ display: "flex", gap: 10, padding: "8px 0",
+                          borderBottom: `1px solid ${C.border}`, alignItems: "flex-start" }}>
+                          <div style={{ width: 5, height: 5, borderRadius: "50%", background: C.warm,
+                            marginTop: 6, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, lineHeight: 1.45, color: C.ink }}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function TaskCard({ task, onToggle, onDelete }) {
+      const pc = PRIORITY_CONFIG[task.priority || "mid"];
+      const isOverdue = task.dueDate && task.dueDate < todayKey() && !task.done;
+      return (
+        <div style={{ background: task.done ? "rgba(0,0,0,0.02)" : C.cardBg,
+          border: `1px solid ${isOverdue ? C.red+"60" : task.done ? "transparent" : C.border}`,
+          borderRadius: 12, padding: "12px 14px", opacity: task.done ? 0.5 : 1 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <div onClick={() => onToggle(task.id)} style={{
+              width: 20, height: 20, borderRadius: 4, flexShrink: 0, marginTop: 1, cursor: "pointer",
+              border: `1.5px solid ${task.done ? C.sage : C.border}`,
+              background: task.done ? C.sage : "transparent",
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {task.done && <span style={{ color: "#fff", fontSize: 11 }}>✓</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, lineHeight: 1.4,
+                textDecoration: task.done ? "line-through" : "none", color: C.ink }}>
+                {task.text}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10,
+                  background: pc.bg, color: pc.color, fontWeight: "bold", letterSpacing: "0.06em" }}>
+                  {pc.label}
+                </span>
+                {task.dueDate && (
+                  <span style={{ fontSize: 10, color: isOverdue ? C.red : C.muted }}>
+                    {isOverdue ? "overdue · " : "due "}
+                    {new Date(task.dueDate+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})}
+                  </span>
+                )}
+                {task.suggestedDay && !task.done && (
+                  <span style={{ fontSize: 10, color: C.steel }}>→ {task.suggestedDay}</span>
+                )}
+              </div>
+              {task.notes && (
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, fontStyle: "italic" }}>{task.notes}</div>
+              )}
+            </div>
+            <button onClick={() => onDelete(task.id)} style={{
+              background: "none", border: "none", color: C.muted,
+              cursor: "pointer", fontSize: 16, padding: "0 2px", flexShrink: 0 }}>x</button>
+          </div>
+        </div>
+      );
+    }
+
+    function AddTaskForm({ onAdd }) {
+      const [text, setText]         = useState("");
+      const [priority, setPriority] = useState("mid");
+      const [dueDate, setDueDate]   = useState("");
+      const [notes, setNotes]       = useState("");
+      const [open, setOpen]         = useState(false);
+
+      const suggestDay = (due) => {
+        const d = new Date(due+"T12:00:00");
+        const dow = d.getDay();
+        if (dow === 1 || dow === 5) return null;
+        const daysToFri = ((5-dow+7)%7)||7;
+        const fri = addDays(d, -daysToFri);
+        if (fri >= new Date()) return "Friday "+fri.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+        return null;
+      };
+
+      const submit = () => {
+        if (!text.trim()) return;
+        onAdd({ id: "t"+Date.now(), text: text.trim(), priority,
+          dueDate: dueDate||null, notes: notes.trim()||null, done: false,
+          suggestedDay: dueDate ? suggestDay(dueDate) : null });
+        setText(""); setPriority("mid"); setDueDate(""); setNotes(""); setOpen(false);
+      };
+
+      return (
+        <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 14,
+          overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 8, padding: "12px 14px", alignItems: "center" }}>
+            <input value={text} onChange={e => setText(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !open && submit()}
+              placeholder="Add a task..."
+              style={{ flex: 1, border: "none", background: "transparent", fontSize: 14,
+                color: C.ink, fontFamily: "inherit", outline: "none" }} />
+            <button onClick={() => setOpen(o => !o)} style={{
+              background: "none", border: "none", color: C.muted,
+              cursor: "pointer", fontSize: 20, padding: 0 }}>{open ? "−" : "+"}</button>
+          </div>
+          {open && (
+            <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 14px",
+              display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: C.muted, marginBottom: 6 }}>Priority</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["high","mid","low"].map(p => {
+                    const pc = PRIORITY_CONFIG[p];
+                    return (
+                      <button key={p} onClick={() => setPriority(p)} style={{
+                        padding: "5px 14px", borderRadius: 20,
+                        border: `1.5px solid ${priority===p ? pc.color : C.border}`,
+                        background: priority===p ? pc.bg : "transparent",
+                        color: priority===p ? pc.color : C.muted,
+                        fontSize: 12, cursor: "pointer", fontFamily: "Georgia, serif",
+                        fontWeight: priority===p ? "bold" : "normal" }}>{pc.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: C.muted, marginBottom: 6 }}>Due date (optional)</div>
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                  style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px",
+                    fontSize: 13, fontFamily: "inherit", background: "transparent", color: C.ink, outline: "none" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: C.muted, marginBottom: 6 }}>Notes (optional)</div>
+                <input value={notes} onChange={e => setNotes(e.target.value)}
+                  placeholder="e.g. need to look up location first"
+                  style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 8,
+                    padding: "6px 10px", fontSize: 13, fontFamily: "inherit",
+                    background: "transparent", color: C.ink, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <button onClick={submit} style={{ background: C.terracotta, color: "#fff", border: "none",
+                borderRadius: 10, padding: "9px", fontSize: 13, cursor: "pointer", fontFamily: "Georgia, serif" }}>
+                Add task
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [tab,          setTab]          = useState(0);
+      const [checks,       setChecks]       = useState({});
+      const [tasks,        setTasks]        = useState([]);
+      const [joyItems,     setJoyItems]     = useState(DEFAULT_JOY);
+      const [newJoy,       setNewJoy]       = useState("");
+      const [sheet,        setSheet]        = useState(null);
+      const [intention,    setIntention]    = useState("");
+      const [lastHairWash, setLastHairWash] = useState(null);
+      const [dayOffset,    setDayOffset]    = useState(0);
+      const [loaded,       setLoaded]       = useState(false);
+
+      useEffect(() => {
+        (async () => {
+          try { const r = await window.storage.get("ds-checks");
+            if (r) { const p = JSON.parse(r.value); if (p.date===todayKey()) setChecks(p.checks||{}); }
+          } catch(_) {}
+          try { const r = await window.storage.get("ds-tasks");
+            if (r) setTasks(JSON.parse(r.value));
+          } catch(_) {}
+          try { const r = await window.storage.get("ds-joy");
+            if (r) setJoyItems(JSON.parse(r.value));
+          } catch(_) {}
+          try { const r = await window.storage.get("ds-intention");
+            if (r) { const p = JSON.parse(r.value); if (p.date===todayKey()) setIntention(p.text||""); }
+          } catch(_) {}
+          try { const r = await window.storage.get("ds-lasthairwash");
+            if (r) setLastHairWash(r.value);
+          } catch(_) {}
+          setLoaded(true);
+        })();
+      }, []);
+
+      useEffect(() => { if (!loaded) return;
+        window.storage.set("ds-checks", JSON.stringify({date:todayKey(),checks})).catch(()=>{});
+      }, [checks, loaded]);
+      useEffect(() => { if (!loaded) return;
+        window.storage.set("ds-tasks", JSON.stringify(tasks)).catch(()=>{});
+      }, [tasks, loaded]);
+      useEffect(() => { if (!loaded) return;
+        window.storage.set("ds-joy", JSON.stringify(joyItems)).catch(()=>{});
+      }, [joyItems, loaded]);
+      useEffect(() => { if (!loaded) return;
+        window.storage.set("ds-intention", JSON.stringify({date:todayKey(),text:intention})).catch(()=>{});
+      }, [intention, loaded]);
+
+      const toggle     = useCallback((id) => setChecks(prev => ({...prev,[id]:!prev[id]})), []);
+      const toggleTask = (id) => setTasks(prev => prev.map(t => t.id===id ? {...t,done:!t.done} : t));
+      const deleteTask = (id) => setTasks(prev => prev.filter(t => t.id!==id));
+      const addTask    = (task) => setTasks(prev => [task, ...prev]);
+
+      const viewDate = addDays(new Date(), dayOffset);
+      const viewDow  = viewDate.getDay();
+      const viewKey  = dateKey(viewDate);
+      const dayData  = SCHEDULE[viewDow] || SCHEDULE[0];
+      const isToday  = dayOffset === 0;
+
+      const dayTasks         = tasks.filter(t => !t.done && t.dueDate === viewKey);
+      const highPriorityOpen = tasks.filter(t => !t.done && t.priority === "high");
+
+      return (
+        <div style={{ minHeight: "100vh", background: C.cream,
+          fontFamily: "Georgia, 'Times New Roman', serif", color: C.ink }}>
+
+          <div style={{ background: C.ink, padding: "20px 24px 0", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.18em", color: C.muted,
+              textTransform: "uppercase", marginBottom: 4 }}>Daily Structure</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setDayOffset(o => Math.max(0,o-1))} style={{
+                background: "none", border: "none",
+                color: dayOffset > 0 ? C.muted : "transparent",
+                cursor: dayOffset > 0 ? "pointer" : "default",
+                fontSize: 24, padding: 0, lineHeight: 1 }}>‹</button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 20, color: C.cream, fontStyle: "italic", letterSpacing: "-0.02em" }}>
+                  {viewDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+                </div>
+                {!isToday && (
+                  <div style={{ fontSize: 11, color: C.terracotta, letterSpacing: "0.08em", marginTop: 1 }}>
+                    {dayOffset === 1 ? "Tomorrow" : `In ${dayOffset} days`}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setDayOffset(o => Math.min(6,o+1))} style={{
+                background: "none", border: "none",
+                color: dayOffset < 6 ? C.muted : "transparent",
+                cursor: dayOffset < 6 ? "pointer" : "default",
+                fontSize: 24, padding: 0, lineHeight: 1 }}>›</button>
+            </div>
+            <div style={{ display: "flex", gap: 4, marginTop: 14, paddingBottom: 16 }}>
+              {["Today","Tasks","Routines","Joy"].map((t,i) => (
+                <button key={t} onClick={() => setTab(i)} style={{
+                  padding: "6px 12px", borderRadius: 20, border: "none",
+                  fontSize: 11, letterSpacing: "0.08em", cursor: "pointer",
+                  fontFamily: "Georgia, serif",
+                  background: tab===i ? C.terracotta : "rgba(255,255,255,0.08)",
+                  color: tab===i ? "#fff" : C.muted, position: "relative" }}>
+                  {t}
+                  {t==="Tasks" && highPriorityOpen.length > 0 && (
+                    <span style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8,
+                      borderRadius: "50%", background: C.red, border: `1.5px solid ${C.ink}` }} />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: "20px 20px 80px" }}>
+
+            {tab === 0 && (
+              <div>
+                {isToday && <IntentionPrompt value={intention} onChange={setIntention} />}
+                {isToday && <EveningNudge joyItems={joyItems} />}
+
+                {dayData.note && (
+                  <div style={{ fontSize: 12, color: C.warm, fontStyle: "italic",
+                    letterSpacing: "0.06em", marginBottom: 16 }}>{dayData.note}</div>
+                )}
+
+                {dayTasks.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+                      color: C.steel, marginBottom: 8 }}>Tasks due today</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {dayTasks.map(t => (
+                        <TaskCard key={t.id} task={t} onToggle={toggleTask} onDelete={deleteTask} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {dayData.blocks.map((block, i) => {
+                    const dotColor  = CAT_COLOR[block.cat] || CAT_COLOR.anchor;
+                    const checkId   = `day-${viewKey}-${i}`;
+                    const done      = !!checks[checkId];
+                    const hasDetail = !!block.detail;
+                    return (
+                      <div key={i}
+                        onClick={() => hasDetail ? setSheet(block.detail) : toggle(checkId)}
+                        style={{ display: "flex", gap: 12, padding: "12px 14px", borderRadius: 10,
+                          background: done ? "rgba(0,0,0,0.03)" : C.cardBg,
+                          border: `1px solid ${done ? "transparent" : C.border}`,
+                          cursor: "pointer", opacity: done ? 0.5 : 1, alignItems: "flex-start" }}>
+                        <div style={{ minWidth: 44, fontSize: 11, color: C.muted, paddingTop: 2 }}>
+                          {block.time}
+                        </div>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%",
+                          background: dotColor, marginTop: 5, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, lineHeight: 1.4,
+                            textDecoration: done ? "line-through" : "none",
+                            color: block.cat === "urgent" ? C.terracotta : C.ink,
+                            fontWeight: block.cat === "urgent" ? "bold" : "normal" }}>
+                            {block.label}
+                            {block.isHairWash && lastHairWash && !done && (
+                              <HairCycleBadge lastHairWash={lastHairWash} compact={true} />
+                            )}
+                          </div>
+                          {block.note && !block.isHairWash && (
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
+                              {block.note}
+                            </div>
+                          )}
+                          {block.isHairWash && !done && (
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, fontStyle: "italic" }}>
+                              Tap to open protocol
+                            </div>
+                          )}
+                        </div>
+                        {hasDetail ? (
+                          <div style={{ fontSize: 18, color: C.muted, flexShrink: 0, lineHeight: 1 }}>›</div>
+                        ) : (
+                          <div style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                            border: `1.5px solid ${done ? dotColor : C.border}`,
+                            background: done ? dotColor : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                            {done && <span style={{ color: "#fff", fontSize: 11 }}>✓</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {Object.entries(CAT_COLOR).map(([key, color]) => (
+                    <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: color }} />
+                      <span style={{ fontSize: 10, color: C.muted, textTransform: "capitalize" }}>{key}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>›</span>
+                    <span style={{ fontSize: 10, color: C.muted }}>tap for detail</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {tab === 1 && (
+              <div>
+                <AddTaskForm onAdd={addTask} />
+                {["high","mid","low"].map(pri => {
+                  const filtered = tasks.filter(t => !t.done && t.priority === pri);
+                  if (!filtered.length) return null;
+                  const pc = PRIORITY_CONFIG[pri];
+                  return (
+                    <div key={pri} style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+                        color: pc.color, marginBottom: 10 }}>
+                        {pri === "high" ? "🔴 " : ""}{pc.label} priority
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {filtered.map(t => (
+                          <TaskCard key={t.id} task={t} onToggle={toggleTask} onDelete={deleteTask} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {tasks.filter(t => t.done).length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+                      color: C.muted, marginBottom: 10 }}>Done</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {tasks.filter(t => t.done).map(t => (
+                        <TaskCard key={t.id} task={t} onToggle={toggleTask} onDelete={deleteTask} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {tasks.length === 0 && (
+                  <div style={{ textAlign: "center", color: C.muted, fontSize: 14,
+                    fontStyle: "italic", marginTop: 40 }}>No tasks yet. Add one above.</div>
+                )}
+              </div>
+            )}
+
+            {tab === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", marginBottom: 4 }}>
+                  Reference only — tap to read, then check the block on Today.
+                </div>
+                <div style={{ background: C.cardBg, border: `1px solid ${C.border}`,
+                  borderRadius: 14, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`,
+                    display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>💆</span>
+                      <span style={{ fontSize: 14, fontWeight: "bold" }}>Hair Wash Protocols</span>
+                    </div>
+                    {lastHairWash && <HairCycleBadge lastHairWash={lastHairWash} compact={false} />}
+                  </div>
+                  <div style={{ display: "flex" }}>
+                    {Object.entries(HAIR_PROTOCOLS).map(([key, p], idx) => (
+                      <button key={key} onClick={() => setSheet("hair-wash")} style={{
+                        flex: 1, padding: "12px 8px", background: "transparent", border: "none",
+                        borderRight: idx < 2 ? `1px solid ${C.border}` : "none",
+                        cursor: "pointer", fontFamily: "Georgia, serif" }}>
+                        <div style={{ fontSize: 11, fontWeight: "bold", color: p.color }}>{p.tag}</div>
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 3, lineHeight: 1.3 }}>{p.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {Object.entries(DETAIL_VIEWS).map(([key, d]) => (
+                  <div key={key} onClick={() => setSheet(key)} style={{
+                    background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 14,
+                    padding: "12px 16px", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 20 }}>{d.emoji}</span>
+                      <span style={{ fontSize: 14, fontWeight: "bold" }}>{d.title}</span>
+                    </div>
+                    <span style={{ fontSize: 18, color: C.muted }}>›</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {tab === 3 && (
+              <div>
+                <div style={{ fontSize: 13, color: C.warm, fontStyle: "italic",
+                  marginBottom: 20, lineHeight: 1.6 }}>
+                  No deadlines. No urgency. A living list of things that make you happy —
+                  the app will nudge you toward one each evening.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                  {joyItems.map((item) => {
+                    const isNudge = dailyJoyNudge(joyItems) && dailyJoyNudge(joyItems).id === item.id;
+                    return (
+                      <div key={item.id} style={{
+                        display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
+                        borderRadius: 10, background: C.cardBg,
+                        border: `1px solid ${isNudge ? C.dustyRose+"80" : C.border}` }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                          background: isNudge ? C.dustyRose : C.muted }} />
+                        <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: C.ink }}>
+                          {item.text}
+                          {isNudge && (
+                            <span style={{ fontSize: 10, color: C.dustyRose,
+                              marginLeft: 8, fontStyle: "italic" }}>tonight's nudge</span>
+                          )}
+                        </span>
+                        <button onClick={() => setJoyItems(prev => prev.filter(j => j.id !== item.id))}
+                          style={{ background: "none", border: "none", color: C.muted,
+                            cursor: "pointer", fontSize: 16, padding: "0 2px" }}>x</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ background: C.cardBg, border: `1px solid ${C.border}`,
+                  borderRadius: 12, padding: "12px 14px", display: "flex", gap: 8, alignItems: "center" }}>
+                  <input value={newJoy} onChange={e => setNewJoy(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && newJoy.trim()) {
+                        setJoyItems(prev => [...prev, {id:"j"+Date.now(),text:newJoy.trim()}]);
+                        setNewJoy("");
+                      }
+                    }}
+                    placeholder="Add something that brings you joy..."
+                    style={{ flex: 1, border: "none", background: "transparent",
+                      fontSize: 13, color: C.ink, fontFamily: "inherit", outline: "none" }} />
+                  <button onClick={() => {
+                    if (!newJoy.trim()) return;
+                    setJoyItems(prev => [...prev, {id:"j"+Date.now(),text:newJoy.trim()}]);
+                    setNewJoy("");
+                  }} style={{ background: C.terracotta, color: "#fff", border: "none",
+                    borderRadius: 8, padding: "6px 14px", fontSize: 12,
+                    cursor: "pointer", fontFamily: "Georgia, serif" }}>Add</button>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic",
+                  marginTop: 12, textAlign: "center" }}>
+                  The evening nudge rotates daily through your list automatically.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {sheet && (
+            <BottomSheet content={sheet} onClose={() => setSheet(null)}
+              lastHairWash={lastHairWash} setLastHairWash={setLastHairWash} />
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
