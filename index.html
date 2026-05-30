@@ -107,7 +107,7 @@ function dateStr(d){return d.toISOString().split('T')[0];}
 function fmtDate(d){return(DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()).toUpperCase();}
 function getWeekKey(){var d=new Date();var day=d.getDay();var diff=d.getDate()-day+(day===0?-6:1);var m=new Date(d);m.setDate(diff);return m.toISOString().split('T')[0];}
 function getAutoBlock(){var h=new Date().getHours();if(h<10)return'morning';if(h<15)return'work';if(h<17)return'life';if(h<21)return'leisure';return'bedtime';}
-function dailyDelight(items,offset){if(!items.length)return null;var d=addDays(new Date(),offset);var seed=parseInt(dateStr(d).replace(/-/g,''));return items[seed%items.length];}
+function dailyDelight(items,offset){if(!items.length)return null;var d=addDays(new Date(),offset);var seed=parseInt(dateStr(d).replace(/-/g,''));var item=items[seed%items.length];return typeof item==='object'?item.text:item;}
 function suggestDay(due){if(!due)return null;var d=new Date(due+'T12:00:00');var dow=d.getDay();if(dow===1||dow===5)return null;var daysToFri=((5-dow+7)%7)||7;var fri=addDays(d,-daysToFri);if(fri>=new Date())return'Friday '+fri.toLocaleDateString('en-US',{month:'short',day:'numeric'});return null;}
 
 // Supabase task functions
@@ -150,6 +150,24 @@ async function deleteTaskFromDb(id){
 
 async function toggleTaskInDb(id,done){
   var res=await db.from('tasks').update({done:done}).eq('id',id);
+  if(res.error)throw res.error;
+}
+
+// Supabase joy functions
+async function fetchJoyItems(){
+  var res=await db.from('joy_items').select('*').order('created_at',{ascending:true});
+  if(res.error)throw res.error;
+  return(res.data||[]).map(function(j){return{id:j.id,text:j.text};});
+}
+
+async function addJoyItem(text){
+  var res=await db.from('joy_items').insert([{text:text}]).select();
+  if(res.error)throw res.error;
+  return res.data&&res.data[0]?res.data[0].id:null;
+}
+
+async function deleteJoyItem(id){
+  var res=await db.from('joy_items').delete().eq('id',id);
   if(res.error)throw res.error;
 }
 
@@ -334,7 +352,7 @@ function App(){
   var _off=useState(0),dayOffset=_off[0],setDayOffset=_off[1];
   var _chk=useState({}),checks=_chk[0],setChecks=_chk[1];
   var _tasks=useState([]),tasks=_tasks[0],setTasks=_tasks[1];
-  var _joy=useState(DEFAULT_JOY),joyItems=_joy[0],setJoyItems=_joy[1];
+  var _joy=useState([]),joyItems=_joy[0],setJoyItems=_joy[1];
   var _nj=useState(''),newJoy=_nj[0],setNewJoy=_nj[1];
   var _int=useState(''),intention=_int[0],setIntention=_int[1];
   var _lhw=useState(null),lastHairWash=_lhw[0],setLastHairWash=_lhw[1];
@@ -362,19 +380,29 @@ function App(){
       // Everything else from localStorage
       try{var r=await window.storage.get('ds-checks');if(r){var p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(e){}
       try{
-        var r3=await window.storage.get('ds-joy');
-        if(r3){var parsed=JSON.parse(r3.value);if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){setJoyItems(parsed.map(function(i){return i.text;}));}else{setJoyItems(parsed);}}
-      }catch(e){}
+        var joyData=await fetchJoyItems();
+        setJoyItems(joyData);
+      }catch(e){console.error('Joy load error:',e);}
       try{var r4=await window.storage.get('ds-intention');if(r4){var p4=JSON.parse(r4.value);if(p4.date===todayStr())setIntention(p4.text||'');}}catch(e){}
       try{var r5=await window.storage.get('ds-lasthairwash');if(r5)setLastHairWash(r5.value);}catch(e){}
       try{var r6=await window.storage.get('ds-jobcount');if(r6){var p6=JSON.parse(r6.value);if(p6.week===getWeekKey())setJobCount(p6);}}catch(e){}
       setLoaded(true);
     })();
+
+    // Auto-refresh tasks when app comes back to foreground
+    function handleVisibility(){
+      if(!document.hidden){
+        fetchTasks().then(function(t){setTasks(t);}).catch(function(){});
+        fetchJoyItems().then(function(j){setJoyItems(j);}).catch(function(){});
+      }
+    }
+    document.addEventListener('visibilitychange',handleVisibility);
+    return function(){document.removeEventListener('visibilitychange',handleVisibility);};
   },[]);
 
   // Persist non-task data to localStorage
   useEffect(function(){if(!loaded)return;window.storage.set('ds-checks',JSON.stringify({date:todayStr(),checks:checks})).catch(function(){});},[checks,loaded]);
-  useEffect(function(){if(!loaded)return;window.storage.set('ds-joy',JSON.stringify(joyItems)).catch(function(){});},[joyItems,loaded]);
+  // Joy items now persisted in Supabase
   useEffect(function(){if(!loaded)return;window.storage.set('ds-intention',JSON.stringify({date:todayStr(),text:intention})).catch(function(){});},[intention,loaded]);
   useEffect(function(){if(!loaded)return;window.storage.set('ds-jobcount',JSON.stringify(jobCount)).catch(function(){});},[jobCount,loaded]);
 
@@ -570,21 +598,21 @@ function App(){
       tab===3?React.createElement('div',{style:{padding:'14px 14px 40px'}},
         React.createElement('div',{style:{border:'0.5px solid '+P.border,overflow:'hidden',marginBottom:10}},
           joyItems.map(function(item,idx){
-            var isNudge=item===todayDelight;
+            var itemText=typeof item==='object'?item.text:item;var isNudge=itemText===todayDelight;
             return React.createElement('div',{key:idx,style:{fontSize:13,padding:'11px 14px',borderBottom:idx<joyItems.length-1?'0.5px solid '+P.border:'none',display:'flex',gap:10,alignItems:'center',background:P.sandCard}},
               React.createElement('div',{style:{width:4,height:4,background:isNudge?P.poppy:P.muted,flexShrink:0}}),
-              React.createElement('span',{style:{flex:1}},item,isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null),
-              React.createElement('button',{onClick:function(){setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
+              React.createElement('span',{style:{flex:1}},typeof item==='object'?item.text:item,isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null),
+              React.createElement('button',{onClick:async function(){var itemId=typeof item==='object'?item.id:null;setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});if(itemId){try{await deleteJoyItem(itemId);}catch(e){console.error('Delete joy error:',e);}}},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
             );
           })
         ),
         React.createElement('div',{style:{border:'0.5px solid '+P.border,padding:'10px 12px',display:'flex',gap:8,alignItems:'center',background:P.sandCard}},
           React.createElement('span',{style:{color:P.muted,fontSize:16}},'+'),
           React.createElement('input',{value:newJoy,onChange:function(e){setNewJoy(e.target.value);},
-            onKeyDown:function(e){if(e.key==='Enter'&&newJoy.trim()){setJoyItems(function(prev){return prev.concat([newJoy.trim()]);});setNewJoy('');}},
+            onKeyDown:async function(e){if(e.key==='Enter'&&newJoy.trim()){var t=newJoy.trim();setNewJoy('');try{var newId=await addJoyItem(t);setJoyItems(function(prev){return prev.concat([{id:newId,text:t}]);});}catch(ex){console.error(ex);}}},
             placeholder:'Add something that brings you joy...',
             style:{flex:1,fontFamily:GEO,fontSize:13,fontStyle:'italic',color:P.ink,WebkitTextFillColor:P.ink,border:'none',background:'transparent',outline:'none'}}),
-          React.createElement('button',{onClick:function(){if(!newJoy.trim())return;setJoyItems(function(prev){return prev.concat([newJoy.trim()]);});setNewJoy('');},style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'4px 10px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Add')
+          React.createElement('button',{onClick:async function(){if(!newJoy.trim())return;var t=newJoy.trim();setNewJoy('');try{var newId=await addJoyItem(t);setJoyItems(function(prev){return prev.concat([{id:newId,text:t}]);});}catch(e){console.error('Add joy error:',e);}},style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'4px 10px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Add')
         )
       ):null
 
