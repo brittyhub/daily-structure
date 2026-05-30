@@ -11,6 +11,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body,#root{min-height:100%;background:#5C4E16;}
@@ -22,14 +23,19 @@ input::placeholder{color:#A08A6A !important;-webkit-text-fill-color:#A08A6A !imp
 <body>
 <div id="root"></div>
 <script>
-window.storage={
-  get:function(k){try{var v=localStorage.getItem('ds_'+k);if(v===null)return Promise.reject(new Error('nf'));return Promise.resolve({value:v});}catch(e){return Promise.reject(e);}},
-  set:function(k,v){try{localStorage.setItem('ds_'+k,typeof v==='string'?v:String(v));return Promise.resolve({key:k,value:v});}catch(e){return Promise.reject(e);}}
+// Supabase client
+var SUPABASE_URL = 'https://zhwyktidhoxtqlzadixd.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_qTPzN298G0S03qDUOXkK5g_l4wtgkxJ';
+var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// localStorage for non-task data (checks, joy, intention, etc.)
+window.storage = {
+  get: function(k){try{var v=localStorage.getItem('ds_'+k);if(v===null)return Promise.reject(new Error('nf'));return Promise.resolve({value:v});}catch(e){return Promise.reject(e);}},
+  set: function(k,v){try{localStorage.setItem('ds_'+k,typeof v==='string'?v:String(v));return Promise.resolve({key:k,value:v});}catch(e){return Promise.reject(e);}}
 };
 </script>
 <script type="text/babel">
-var _useState=React.useState,_useEffect=React.useEffect,_useCallback=React.useCallback;
-var useState=_useState,useEffect=_useEffect,useCallback=_useCallback;
+var useState=React.useState,useEffect=React.useEffect,useCallback=React.useCallback;
 
 var P={
   sand:'#F5E8D5',sandCard:'#EFE0C8',
@@ -63,7 +69,7 @@ var HAIR={
   ]},
   B:{label:'Softness + Strength',tag:'Wash B',color:P.terra,subtitle:'2-4 days after Wash A',sections:[
     {h:'Shampoo',items:['Pantene Grow Abundant shampoo']},
-    {h:'Conditioning — choose ONE (not both)',items:['Blake Brown mask — recommended for you',"Trader Joe's mask — alternative"]},
+    {h:'Conditioning — choose ONE',items:['Blake Brown mask — recommended for you',"Trader Joe's mask — alternative"]},
     {h:'Post-Wash',items:['IGK Good Behavior spray','Elvive Glycolic serum — tiny amount on ends only']},
     {h:'Tonight',items:['Fleur serum on scalp before bed']}
   ]},
@@ -91,27 +97,61 @@ var DEFAULT_JOY=[
   'Plan a future trip or day out, even just as a daydream'
 ];
 
-var DAY_NOTES=[
-  'Rest up — it is Sunday.',
-  'New week, fresh start.',
-  'Deep focus day.',
-  'Midweek — keep the momentum.',
-  'Almost there.',
-  'Reset and recharge.',
-  'Enjoy the weekend.'
-];
-
+var DAY_NOTES=['Rest up — it is Sunday.','New week, fresh start.','Deep focus day.','Midweek — keep the momentum.','Almost there.','Reset and recharge.','Enjoy the weekend.'];
 var DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function todayStr(){return new Date().toISOString().split('T')[0];}
 function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function dateStr(d){return d.toISOString().split('T')[0];}
-function fmtDate(d){return (DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()).toUpperCase();}
+function fmtDate(d){return(DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()).toUpperCase();}
 function getWeekKey(){var d=new Date();var day=d.getDay();var diff=d.getDate()-day+(day===0?-6:1);var m=new Date(d);m.setDate(diff);return m.toISOString().split('T')[0];}
 function getAutoBlock(){var h=new Date().getHours();if(h<10)return'morning';if(h<15)return'work';if(h<17)return'life';if(h<21)return'leisure';return'bedtime';}
 function dailyDelight(items,offset){if(!items.length)return null;var d=addDays(new Date(),offset);var seed=parseInt(dateStr(d).replace(/-/g,''));return items[seed%items.length];}
 function suggestDay(due){if(!due)return null;var d=new Date(due+'T12:00:00');var dow=d.getDay();if(dow===1||dow===5)return null;var daysToFri=((5-dow+7)%7)||7;var fri=addDays(d,-daysToFri);if(fri>=new Date())return'Friday '+fri.toLocaleDateString('en-US',{month:'short',day:'numeric'});return null;}
+
+// Supabase task functions
+async function fetchTasks(){
+  var res=await db.from('tasks').select('*').order('done',{ascending:true});
+  if(res.error)throw res.error;
+  // normalize from db format to app format
+  return(res.data||[]).map(function(t){
+    return{
+      id:t.id,text:t.text,priority:t.priority||'mid',
+      type:t.type||'personal',dueDate:t.due_date||null,
+      notes:t.notes||null,done:t.done||false,
+      recurring:t.recurring||'none',suggestedDay:t.suggested_day||null
+    };
+  });
+}
+
+async function saveTask(task){
+  var row={text:task.text,priority:task.priority,type:task.type,
+    due_date:task.dueDate||null,notes:task.notes||null,
+    done:task.done,recurring:task.recurring||'none',
+    suggested_day:task.suggestedDay||null};
+  if(task.id&&!task.id.startsWith('t')){
+    // existing uuid from db
+    var res=await db.from('tasks').update(row).eq('id',task.id);
+    if(res.error)throw res.error;
+  } else {
+    // new task - let db generate uuid
+    var res2=await db.from('tasks').insert([row]).select();
+    if(res2.error)throw res2.error;
+    return res2.data&&res2.data[0]?res2.data[0].id:task.id;
+  }
+  return task.id;
+}
+
+async function deleteTaskFromDb(id){
+  var res=await db.from('tasks').delete().eq('id',id);
+  if(res.error)throw res.error;
+}
+
+async function toggleTaskInDb(id,done){
+  var res=await db.from('tasks').update({done:done}).eq('id',id);
+  if(res.error)throw res.error;
+}
 
 function Chk(){
   return React.createElement('svg',{width:11,height:11,viewBox:'0 0 11 11'},
@@ -120,8 +160,8 @@ function Chk(){
 }
 
 function CkBox(props){
-  var done=props.done,color=props.color,onClick=props.onClick,light=props.light;
-  return React.createElement('div',{onClick:onClick,style:{width:19,height:19,border:'1.5px solid '+(done?color:(light?'rgba(255,255,255,0.3)':'rgba(58,42,26,0.2)')),background:done?color:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}},done?React.createElement(Chk):null);
+  var done=props.done,color=props.color,onClick=props.onClick;
+  return React.createElement('div',{onClick:onClick,style:{width:19,height:19,border:'1.5px solid '+(done?color:'rgba(58,42,26,0.2)'),background:done?color:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}},done?React.createElement(Chk):null);
 }
 
 function CheckRow(props){
@@ -142,7 +182,6 @@ function HairSheet(props){
   var _s=useState(suggested),sel=_s[0],setSel=_s[1];
   var proto=HAIR[sel];
   function pick(k){setSel(k);setLastHairWash(k);window.storage.set('ds-lasthairwash',k).catch(function(){});}
-
   return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:200}},
     React.createElement('div',{onClick:onClose,style:{position:'absolute',inset:0,background:'rgba(58,42,26,0.55)'}}),
     React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:P.sand,maxHeight:'86vh',overflowY:'auto'}},
@@ -182,16 +221,19 @@ function TaskCard(props){
   var pc=PC[task.priority||'mid'];
   var overdue=task.dueDate&&task.dueDate<todayStr()&&!task.done;
   var pri=task.priority||'mid';
-  var priLabel=pri.charAt(0).toUpperCase()+pri.slice(1);
-  return React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+(overdue?P.poppy:P.border),padding:'11px 12px',opacity:task.done?0.5:1}},
+  var typeLabel=task.type==='work'?'Work':task.type==='leisure'?'Leisure':'Personal';
+  var typeBg=task.type==='work'?'#E0DCC4':task.type==='leisure'?'#F0E0DA':'#E8D8C4';
+  var typeColor=task.type==='work'?'#5A4F1A':task.type==='leisure'?'#5A2038':P.ash;
+  var typeBorder=task.type==='work'?'#B8A870':task.type==='leisure'?'#C8A0B0':'#C8B080';
+  return React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+(overdue?P.poppy:P.border),padding:'11px 12px',opacity:task.done?0.5:1,marginBottom:5}},
     React.createElement('div',{style:{display:'flex',gap:10,alignItems:'flex-start'}},
-      React.createElement(CkBox,{done:task.done,color:P.grass,onClick:function(){onToggle(task.id);}}),
+      React.createElement(CkBox,{done:task.done,color:P.grass,onClick:function(){onToggle(task.id,!task.done);}}),
       React.createElement('div',{style:{flex:1}},
         React.createElement('div',{style:{fontSize:14,textDecoration:task.done?'line-through':'none',marginBottom:5,lineHeight:1.4}},task.text),
         React.createElement('div',{style:{display:'flex',gap:3,flexWrap:'wrap',alignItems:'center'}},
-          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:pc.bg,color:pc.color,border:'0.5px solid '+pc.border}},priLabel),
+          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:pc.bg,color:pc.color,border:'0.5px solid '+pc.border}},pri.charAt(0).toUpperCase()+pri.slice(1)),
           task.dueDate?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:overdue?P.poppy:P.muted}},(overdue?'overdue — ':'due ')+new Date(task.dueDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})):null,
-          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:task.type==='work'?'#E0DCC4':task.type==='leisure'?'#F0E0DA':'#E8D8C4',color:task.type==='work'?'#5A4F1A':task.type==='leisure'?'#5A2038':P.ash,border:'0.5px solid '+(task.type==='work'?'#B8A870':task.type==='leisure'?'#C8A0B0':'#C8B080')}},task.type==='work'?'Work':task.type==='leisure'?'Leisure':'Personal'),
+          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:typeBg,color:typeColor,border:'0.5px solid '+typeBorder}},typeLabel),
           task.recurring&&task.recurring!=='none'?React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:'#E0DCC4',color:'#5A4F1A',border:'0.5px solid #B8A870'}},'Recurring'):null,
           task.suggestedDay&&!task.done?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.terra}},'— '+task.suggestedDay):null
         ),
@@ -203,7 +245,7 @@ function TaskCard(props){
 }
 
 function AddTaskForm(props){
-  var onAdd=props.onAdd;
+  var onAdd=props.onAdd,saving=props.saving;
   var _t=useState(''),text=_t[0],setText=_t[1];
   var _p=useState('mid'),priority=_p[0],setPriority=_p[1];
   var _ty=useState('personal'),type=_ty[0],setType=_ty[1];
@@ -214,8 +256,10 @@ function AddTaskForm(props){
   var PC={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
 
   function submit(){
-    if(!text.trim())return;
-    onAdd({id:'t'+Date.now(),text:text.trim(),priority:priority,type:type,dueDate:dueDate||null,notes:notes.trim()||null,done:false,recurring:recurring,suggestedDay:dueDate?suggestDay(dueDate):null});
+    if(!text.trim()||saving)return;
+    onAdd({text:text.trim(),priority:priority,type:type,dueDate:dueDate||null,
+      notes:notes.trim()||null,done:false,recurring:recurring,
+      suggestedDay:dueDate?suggestDay(dueDate):null});
     setText('');setPriority('mid');setType('personal');setDueDate('');setNotes('');setRecurring('none');setOpen(false);
   }
 
@@ -228,9 +272,7 @@ function AddTaskForm(props){
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Priority'),
         React.createElement('div',{style:{display:'flex',gap:4}},
-          ['high','mid','low'].map(function(p){
-            return React.createElement('button',{key:p,onClick:function(){setPriority(p);},style:{padding:'3px 10px',border:'0.5px solid '+(priority===p?PC[p].color:P.border),background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));
-          })
+          ['high','mid','low'].map(function(p){return React.createElement('button',{key:p,onClick:function(){setPriority(p);},style:{padding:'3px 10px',border:'0.5px solid '+(priority===p?PC[p].color:P.border),background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));})
         )
       ),
       React.createElement('div',null,
@@ -259,7 +301,7 @@ function AddTaskForm(props){
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Notes (optional)'),
         React.createElement('input',{value:notes,onChange:function(e){setNotes(e.target.value);},placeholder:'e.g. need to look up location first',style:{width:'100%',border:'0.5px solid '+P.border,padding:'5px 8px',fontFamily:GEO,fontSize:12,fontStyle:'italic',background:'transparent',color:P.ink,WebkitTextFillColor:P.ink,outline:'none',borderRadius:0}})
       ),
-      React.createElement('button',{onClick:submit,style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'9px',fontFamily:CP,fontSize:12,cursor:'pointer',letterSpacing:'0.06em',borderRadius:0}},'Add task')
+      React.createElement('button',{onClick:submit,disabled:saving,style:{background:saving?P.muted:P.poppy,color:'#FDF0E8',border:'none',padding:'9px',fontFamily:CP,fontSize:12,cursor:saving?'default':'pointer',letterSpacing:'0.06em',borderRadius:0}},saving?'Saving...':'Add task')
     ):null
   );
 }
@@ -302,21 +344,26 @@ function App(){
   var _tf=useState('all'),taskFilter=_tf[0],setTaskFilter=_tf[1];
   var _ts=useState('priority'),taskSort=_ts[0],setTaskSort=_ts[1];
   var _ld=useState(false),loaded=_ld[0],setLoaded=_ld[1];
+  var _sv=useState(false),saving=_sv[0],setSaving=_sv[1];
+  var _err=useState(null),dbError=_err[0],setDbError=_err[1];
 
+  // Load tasks from Supabase + other data from localStorage
   useEffect(function(){
     (async function(){
+      // Tasks from Supabase
+      try{
+        var t=await fetchTasks();
+        setTasks(t);
+        setDbError(null);
+      }catch(e){
+        console.error('Supabase error:',e);
+        setDbError('Could not connect to database.');
+      }
+      // Everything else from localStorage
       try{var r=await window.storage.get('ds-checks');if(r){var p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(e){}
-      try{var r2=await window.storage.get('ds-tasks');if(r2)setTasks(JSON.parse(r2.value));}catch(e){}
       try{
         var r3=await window.storage.get('ds-joy');
-        if(r3){
-          var parsed=JSON.parse(r3.value);
-          if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){
-            setJoyItems(parsed.map(function(i){return i.text;}));
-          } else {
-            setJoyItems(parsed);
-          }
-        }
+        if(r3){var parsed=JSON.parse(r3.value);if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){setJoyItems(parsed.map(function(i){return i.text;}));}else{setJoyItems(parsed);}}
       }catch(e){}
       try{var r4=await window.storage.get('ds-intention');if(r4){var p4=JSON.parse(r4.value);if(p4.date===todayStr())setIntention(p4.text||'');}}catch(e){}
       try{var r5=await window.storage.get('ds-lasthairwash');if(r5)setLastHairWash(r5.value);}catch(e){}
@@ -325,16 +372,34 @@ function App(){
     })();
   },[]);
 
+  // Persist non-task data to localStorage
   useEffect(function(){if(!loaded)return;window.storage.set('ds-checks',JSON.stringify({date:todayStr(),checks:checks})).catch(function(){});},[checks,loaded]);
-  useEffect(function(){if(!loaded)return;window.storage.set('ds-tasks',JSON.stringify(tasks)).catch(function(){});},[tasks,loaded]);
   useEffect(function(){if(!loaded)return;window.storage.set('ds-joy',JSON.stringify(joyItems)).catch(function(){});},[joyItems,loaded]);
   useEffect(function(){if(!loaded)return;window.storage.set('ds-intention',JSON.stringify({date:todayStr(),text:intention})).catch(function(){});},[intention,loaded]);
   useEffect(function(){if(!loaded)return;window.storage.set('ds-jobcount',JSON.stringify(jobCount)).catch(function(){});},[jobCount,loaded]);
 
   var toggle=useCallback(function(id){setChecks(function(prev){var n=Object.assign({},prev);n[id]=!n[id];return n;});},[]);
-  function toggleTask(id){setTasks(function(prev){return prev.map(function(t){return t.id===id?Object.assign({},t,{done:!t.done}):t;});});}
-  function deleteTask(id){setTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});}
-  function addTask(task){setTasks(function(prev){return[task].concat(prev);});}
+
+  async function addTask(taskData){
+    setSaving(true);
+    try{
+      var newId=await saveTask(taskData);
+      var newTask=Object.assign({},taskData,{id:newId});
+      setTasks(function(prev){return[newTask].concat(prev);});
+    }catch(e){console.error('Save error:',e);}
+    setSaving(false);
+  }
+
+  async function toggleTask(id,done){
+    setTasks(function(prev){return prev.map(function(t){return t.id===id?Object.assign({},t,{done:done}):t;});});
+    try{await toggleTaskInDb(id,done);}catch(e){console.error('Toggle error:',e);}
+  }
+
+  async function deleteTask(id){
+    setTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});
+    try{await deleteTaskFromDb(id);}catch(e){console.error('Delete error:',e);}
+  }
+
   function toggleBlock(id){setOpenBlock(function(prev){return prev===id?null:id;});}
   function incJob(){setJobCount(function(prev){return{week:getWeekKey(),count:prev.week===getWeekKey()?prev.count+1:1};});}
 
@@ -343,17 +408,14 @@ function App(){
   var viewKey=dateStr(viewDate);
   var isToday=dayOffset===0;
   var isHairWashDay=viewDow===3||viewDow===5;
-
   var submitted=jobCount.week===getWeekKey()?jobCount.count:0;
   var jobLeft=Math.max(0,10-submitted);
   var tasksDueToday=tasks.filter(function(t){return!t.done&&t.dueDate===viewKey;});
   var highPriOpen=tasks.filter(function(t){return!t.done&&t.priority==='high';});
   var todayDelight=dailyDelight(joyItems,dayOffset);
   var dayNote=DAY_NOTES[viewDate.getDay()]||'';
-
   var today=new Date();
-  var lastDay=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
-  var isLastDayOfMonth=isToday&&today.getDate()===lastDay;
+  var isLastDayOfMonth=isToday&&today.getDate()===new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
 
   var priOrder={high:0,mid:1,low:2};
   var filteredTasks=tasks.filter(function(t){return taskFilter==='all'||t.type===taskFilter;}).sort(function(a,b){
@@ -365,45 +427,24 @@ function App(){
     var pfx=viewKey+'-'+blockId;
     if(blockId==='morning'){
       var showerItem=isHairWashDay?{id:pfx+'-hair',text:'Hair wash shower',isHairWash:true}:{id:pfx+'-shower',text:'Shower'};
-      return[
-        {id:pfx+'-wake',text:'Wake up + out of bed'},
-        {id:pfx+'-teeth',text:'Brush teeth'},
-        {id:pfx+'-skin',text:'AM skincare'},
-        {id:pfx+'-meds',text:'Medication',note:'30-60 min before eating or drinking'},
-        {id:pfx+'-workout',text:'Workout — treadmill or hoop'},
-        showerItem,
-        {id:pfx+'-lotion',text:'Lotion + body care'},
-        {id:pfx+'-bfast',text:'Eat a healthy breakfast'},
-        {id:pfx+'-vits',text:'Vitamins'},
-        {id:pfx+'-water',text:'First bottle of water'}
-      ];
+      return[{id:pfx+'-wake',text:'Wake up + out of bed'},{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'AM skincare'},{id:pfx+'-meds',text:'Medication',note:'30-60 min before eating or drinking'},{id:pfx+'-workout',text:'Workout — treadmill or hoop'},showerItem,{id:pfx+'-lotion',text:'Lotion + body care'},{id:pfx+'-bfast',text:'Eat a healthy breakfast'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-water',text:'First bottle of water'}];
     }
     if(blockId==='work'){
       var wt=tasks.filter(function(t){return!t.done&&t.type==='work';});
-      var base=[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}];
-      return base.concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text};}));
+      return[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}].concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text};}));
     }
     if(blockId==='life'){
       var pt=tasks.filter(function(t){return!t.done&&t.type==='personal'&&(t.dueDate===viewKey||!t.dueDate);});
-      var base2=[{id:pfx+'-admin',text:'Life admin — pick one task to complete or advance'}];
-      return base2.concat(pt.slice(0,4).map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
+      return[{id:pfx+'-admin',text:'Life admin — pick one task to complete or advance'}].concat(pt.slice(0,4).map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
     }
     if(blockId==='leisure'){
-      var lt=tasks.filter(function(t){return!t.done&&t.type==='leisure';});
+      var lt=tasks.filter(function(t){return!t.done&&t.type==='leisure'&&(t.dueDate===viewKey||!t.dueDate);});
       var base=[];
       if(todayDelight)base.push({id:pfx+'-delight',text:todayDelight,isDelight:true});
       return base.concat(lt.map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
     }
     if(blockId==='bedtime'){
-      return[
-        {id:pfx+'-teeth',text:'Brush teeth'},
-        {id:pfx+'-skin',text:'PM skincare'},
-        {id:pfx+'-meds',text:'Meds'},
-        {id:pfx+'-deo',text:'Deodorant'},
-        {id:pfx+'-serum',text:'Hair serum on scalp'},
-        {id:pfx+'-vits',text:'Vitamins'},
-        {id:pfx+'-lotion',text:'Hand lotion'}
-      ];
+      return[{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'PM skincare'},{id:pfx+'-meds',text:'Meds'},{id:pfx+'-deo',text:'Deodorant'},{id:pfx+'-serum',text:'Hair serum on scalp'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-lotion',text:'Hand lotion'}];
     }
     return[];
   }
@@ -420,11 +461,10 @@ function App(){
       })
     ),
 
-    // SCREENS
     React.createElement('div',{style:{flex:1}},
 
       // HELLO
-      tab===0?React.createElement('div',{style:{padding:'26px 18px 40px',backgroundImage:'linear-gradient(rgba(214,83,63,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(214,83,63,0.07) 1px,transparent 1px)',backgroundSize:'22px 22px',backgroundColor:P.sand}},
+      tab===0?React.createElement('div',{style:{padding:'26px 18px 40px',backgroundImage:'linear-gradient(rgba(214,83,63,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(214,83,63,0.07) 1px,transparent 1px)',backgroundSize:'22px 22px',backgroundColor:P.sand,minHeight:'100vh'}},
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:7}},fmtDate(viewDate)),
         React.createElement('div',{style:{fontSize:27,fontStyle:'italic',lineHeight:1.2,marginBottom:24}},'Hello,',React.createElement('br'),'Brittany.'),
         React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+P.border,padding:'20px 18px',marginBottom:14}},
@@ -433,15 +473,12 @@ function App(){
             React.createElement('div',{style:{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}},dayNote),
             tasksDueToday.length>0?React.createElement('div',{style:{marginBottom:10}},
               React.createElement('span',null,'⚠️ '),
-              tasksDueToday.length===1?('Don\'t forget today: '+tasksDueToday[0].text):('You have '+tasksDueToday.length+' tasks due today.')
+              tasksDueToday.length===1?('Today: '+tasksDueToday[0].text):('You have '+tasksDueToday.length+' tasks due today.')
             ):null,
-            isLastDayOfMonth?React.createElement('div',{style:{marginBottom:10}},'📅 Last day of the month — check your recurring tasks.'):null,
+            isLastDayOfMonth?React.createElement('div',{style:{marginBottom:10}},'📅 Last day of the month — check recurring tasks.'):null,
+            dbError?React.createElement('div',{style:{marginBottom:10,color:P.poppy,fontFamily:CP,fontSize:12}},'⚠ '+dbError):null,
             React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
-              React.createElement('span',null,
-                React.createElement('span',null,'✏️ '),
-                React.createElement('strong',{style:{fontWeight:500}},submitted+' of 10'),
-                ' applications this week — ',jobLeft,' to go.'
-              ),
+              React.createElement('span',null,'✏️ ',React.createElement('strong',{style:{fontWeight:500}},submitted+' of 10'),' applications this week — ',jobLeft,' to go.'),
               React.createElement('span',{onClick:incJob,style:{fontFamily:CP,fontSize:10,color:P.poppy,cursor:'pointer',border:'0.5px solid '+P.poppy,padding:'1px 8px'}},'+1')
             ),
             submitted>=10?React.createElement('div',{style:{color:P.grass,fontStyle:'italic',fontSize:13,marginTop:6}},'🎉 Weekly goal reached!'):null
@@ -458,7 +495,6 @@ function App(){
           var items=buildBlockItems(block.id);
           var doneCount=items.filter(function(item){return!!checks[item.id];}).length;
           var nextWash=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
-
           return React.createElement('div',{key:block.id,style:{marginBottom:5,border:'0.5px solid '+block.border}},
             React.createElement('div',{onClick:function(){toggleBlock(block.id);},style:{background:block.bg,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'15px 16px',cursor:'pointer'}},
               React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:10}},
@@ -468,13 +504,10 @@ function App(){
               React.createElement('div',{style:{fontSize:16,color:block.txt+'80',fontWeight:'bold'}},isOpen?'v':'>')
             ),
             isOpen?React.createElement('div',{style:{background:P.sand,padding:'2px 16px 14px',borderTop:'0.5px solid '+block.border}},
-              items.length===0?React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}},
-                block.id==='leisure'?'Add items to your Delights list to get a nudge here.':'Nothing scheduled.'
-              ):null,
+              items.length===0?React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}},block.id==='leisure'?'Add Leisure tasks or Delights to see them here.':'Nothing scheduled.'):null,
               items.map(function(item,idx){
                 var done=!!checks[item.id];
                 var isLast=idx===items.length-1;
-
                 if(item.isHairWash){
                   return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)'}},
                     React.createElement('div',{style:{display:'flex',alignItems:'center',gap:11,flex:1},onClick:function(){toggle(item.id);}},
@@ -487,12 +520,9 @@ function App(){
                     React.createElement('div',{onClick:function(){setHairSheet(true);},style:{padding:'4px 10px',cursor:'pointer',color:block.cht,fontSize:16,fontWeight:500}},'>>')
                   );
                 }
-
                 if(item.isDelight){
                   return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)',cursor:'pointer'},
-                    onClick:function(){
-                      if(!done){toggle(item.id);setTimeout(function(){toggle(item.id);},1400);}
-                    }},
+                    onClick:function(){if(!done){toggle(item.id);setTimeout(function(){toggle(item.id);},1400);}}},
                     React.createElement(CkBox,{done:done,color:block.cht}),
                     React.createElement('div',{style:{marginTop:1}},
                       React.createElement('div',{style:{fontSize:13,fontStyle:'italic',color:block.border}},'✦ '+item.text),
@@ -500,7 +530,6 @@ function App(){
                     )
                   );
                 }
-
                 return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:toggle,isLast:isLast});
               })
             ):null
@@ -524,18 +553,17 @@ function App(){
             })
           )
         ),
-        React.createElement(AddTaskForm,{onAdd:addTask}),
-        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:5}},
+        React.createElement(AddTaskForm,{onAdd:addTask,saving:saving}),
+        !loaded?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontFamily:CP,fontSize:12,padding:'20px 0'}},'Loading tasks...'):null,
+        loaded?React.createElement('div',null,
           filteredTasks.filter(function(t){return!t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});}),
           filteredTasks.filter(function(t){return t.done;}).length>0?
             React.createElement('div',null,
               React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,margin:'14px 0 8px'}},'Done'),
-              React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:5}},
-                filteredTasks.filter(function(t){return t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});})
-              )
+              filteredTasks.filter(function(t){return t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});})
             ):null,
           filteredTasks.length===0?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontSize:14,fontStyle:'italic',marginTop:40,fontFamily:CP}},'No tasks yet. Add one above.'):null
-        )
+        ):null
       ):null,
 
       // DELIGHTS
@@ -545,10 +573,7 @@ function App(){
             var isNudge=item===todayDelight;
             return React.createElement('div',{key:idx,style:{fontSize:13,padding:'11px 14px',borderBottom:idx<joyItems.length-1?'0.5px solid '+P.border:'none',display:'flex',gap:10,alignItems:'center',background:P.sandCard}},
               React.createElement('div',{style:{width:4,height:4,background:isNudge?P.poppy:P.muted,flexShrink:0}}),
-              React.createElement('span',{style:{flex:1}},
-                item,
-                isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null
-              ),
+              React.createElement('span',{style:{flex:1}},item,isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null),
               React.createElement('button',{onClick:function(){setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
             );
           })
@@ -565,7 +590,7 @@ function App(){
 
     ),
 
-    // FOOTER NAV
+    // FOOTER
     React.createElement('div',{style:{background:P.ash,display:'flex',borderTop:'1px solid '+P.ashBorder,position:'sticky',bottom:0,paddingBottom:'env(safe-area-inset-bottom,0px)'}},
       React.createElement('button',{onClick:function(){setDayOffset(function(o){return Math.max(-2,o-1);});},style:{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:'1px solid '+P.ashBorder,fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}},'< Back'),
       React.createElement('button',{onClick:function(){setDayOffset(0);},style:{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:'1px solid '+P.ashBorder,fontFamily:CP,fontSize:10,letterSpacing:'0.14em',textTransform:'uppercase',cursor:'pointer',color:isToday?P.poppy:'#9A8A5A',borderRadius:0}},'Today'),
@@ -573,7 +598,6 @@ function App(){
     ),
 
     hairSheet?React.createElement(HairSheet,{onClose:function(){setHairSheet(false);},lastHairWash:lastHairWash,setLastHairWash:setLastHairWash}):null
-
   );
 }
 
