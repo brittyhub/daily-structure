@@ -16,7 +16,6 @@
 html,body,#root{min-height:100%;background:#5C4E16;}
 body{overscroll-behavior:none;}
 input,button{-webkit-appearance:none;border-radius:0;}
-input[type="date"]{-webkit-appearance:none;}
 input::placeholder{color:#A08A6A !important;-webkit-text-fill-color:#A08A6A !important;}
 </style>
 </head>
@@ -29,703 +28,556 @@ window.storage={
 };
 </script>
 <script type="text/babel">
-const {useState,useEffect,useCallback,useRef}=React;
+var _useState=React.useState,_useEffect=React.useEffect,_useCallback=React.useCallback;
+var useState=_useState,useEffect=_useEffect,useCallback=_useCallback;
 
-// Palette
-const P={
-  sand:'#F5E8D5', sandCard:'#EFE0C8',
-  ash:'#5C4E16', ashBorder:'#3A3A10',
-  poppy:'#D6533F', poppyBorder:'#A03020',
-  grass:'#84752F', grassBorder:'#5A4F1A',
-  terra:'#87332B', terraBorder:'#5A1F18',
-  wine:'#863B56', wineBorder:'#5A2038',
-  elder:'#5B1B3A', elderBorder:'#3A0A24',
-  sand2:'#E5C1A1', muted:'#A08A6A',
-  ink:'#3A2A1A', border:'#D4B890',
+var P={
+  sand:'#F5E8D5',sandCard:'#EFE0C8',
+  ash:'#5C4E16',ashBorder:'#3A3A10',
+  poppy:'#D6533F',poppyBorder:'#A03020',
+  grass:'#84752F',grassBorder:'#5A4F1A',
+  terra:'#87332B',terraBorder:'#5A1F18',
+  wine:'#863B56',wineBorder:'#5A2038',
+  elder:'#5B1B3A',elderBorder:'#3A0A24',
+  sand2:'#E5C1A1',muted:'#A08A6A',ink:'#3A2A1A',border:'#D4B890'
 };
-const GEO="Georgia,'Times New Roman',serif";
-const CP="'Courier Prime',monospace";
+var GEO="Georgia,'Times New Roman',serif";
+var CP="'Courier Prime',monospace";
 
-const BLOCKS=[
-  {id:'morning', label:'Morning',  bg:P.poppy,  border:P.poppyBorder, txt:'#FDF0E8', cht:P.poppy},
-  {id:'work',    label:'Work',     bg:P.grass,  border:P.grassBorder, txt:'#F5EAD8', cht:P.grass},
-  {id:'life',    label:'Life',     bg:P.terra,  border:P.terraBorder, txt:'#F5EAD8', cht:P.terra},
-  {id:'leisure', label:'Leisure',  bg:P.wine,   border:P.wineBorder,  txt:'#F5EAD8', cht:P.wine},
-  {id:'bedtime', label:'Bedtime',  bg:P.elder,  border:P.elderBorder, txt:P.sand2,   cht:P.elder},
+var BLOCKS=[
+  {id:'morning',label:'Morning', bg:P.poppy, border:P.poppyBorder,txt:'#FDF0E8',cht:P.poppy},
+  {id:'work',   label:'Work',    bg:P.grass,  border:P.grassBorder,txt:'#F5EAD8',cht:P.grass},
+  {id:'life',   label:'Life',    bg:P.terra,  border:P.terraBorder,txt:'#F5EAD8',cht:P.terra},
+  {id:'leisure',label:'Leisure', bg:P.wine,   border:P.wineBorder, txt:'#F5EAD8',cht:P.wine},
+  {id:'bedtime',label:'Bedtime', bg:P.elder,  border:P.elderBorder,txt:P.sand2,  cht:P.elder}
 ];
 
-const HAIR={
+var HAIR={
   A:{label:'Reset + Volume',tag:'Wash A',color:P.poppy,subtitle:'1x per week — clarifying wash',sections:[
     {h:'Before Shower',items:['EverPure Bond Repair Pre-Shampoo — mids + ends only','Leave on 10 minutes before stepping in']},
-    {h:'Shampoo',items:["L'Oréal Clarify shampoo",'Double cleanse if lots of dry shampoo buildup']},
+    {h:'Shampoo',items:["L'Oreal Clarify shampoo",'Double cleanse if lots of dry shampoo buildup']},
     {h:'Condition',items:['Pantene Grow Abundant conditioner — mids/ends only']},
     {h:'Post-Wash',items:['IGK Good Behavior spray','Elvive Glycolic Leave-In — small amount, mostly ends']},
     {h:'Style',items:['Shark FlexStyle / Airwrap']},
-    {h:'Tonight — don\'t forget',items:['Fleur serum on scalp before bed ←']},
+    {h:'Tonight',items:['Fleur serum on scalp before bed']}
   ]},
   B:{label:'Softness + Strength',tag:'Wash B',color:P.terra,subtitle:'2-4 days after Wash A',sections:[
     {h:'Shampoo',items:['Pantene Grow Abundant shampoo']},
-    {h:'Conditioning — choose ONE (not both)',items:['Blake Brown mask ← recommended for you',"Trader Joe's mask — alternative"]},
+    {h:'Conditioning — choose ONE (not both)',items:['Blake Brown mask — recommended for you',"Trader Joe's mask — alternative"]},
     {h:'Post-Wash',items:['IGK Good Behavior spray','Elvive Glycolic serum — tiny amount on ends only']},
-    {h:'Tonight — don\'t forget',items:['Fleur serum on scalp before bed ←']},
+    {h:'Tonight',items:['Fleur serum on scalp before bed']}
   ]},
   C:{label:'Good Hair Day',tag:'Wash C',color:P.grass,subtitle:'Optional — going out / glossy hair',sections:[
     {h:'Shampoo',items:['Pantene shampoo']},
     {h:'Condition',items:['Light conditioner only']},
-    {h:'Gloss',items:['Playa Gloss Rinse']},
-  ]},
+    {h:'Gloss',items:['Playa Gloss Rinse']}
+  ]}
 };
 
-const DEFAULT_JOY=[
+var DEFAULT_JOY=[
   'Check Rodeo for upcoming events worth adding to the calendar',
   'Look up new album releases this week',
   'Check if any exhibitions or shows are closing soon',
   'Find a book to start next — check your reading list',
   'Scan concert listings — anything worth proposing to Adam?',
-  'Check saved restaurants or cafes you\'ve been meaning to try',
-  'Find a fun local errand to attach to Friday\'s outing',
+  'Check saved restaurants or cafes you have been meaning to try',
+  'Find a fun local errand to attach to Friday outing',
   'Read one saved newsletter or Substack',
-  'Text a friend you\'ve been meaning to catch up with',
+  'Text a friend you have been meaning to catch up with',
   'Browse a bookstore site — wishlisting only, no buying',
   'Do a crossword or word game',
   'Put on an album and actually listen to it, start to finish',
   'Flip through a magazine or coffee table book',
-  'Plan a future trip or day out, even just as a daydream',
+  'Plan a future trip or day out, even just as a daydream'
 ];
 
-const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const todayStr=()=>new Date().toISOString().split('T')[0];
-const addDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
-const dateStr=d=>d.toISOString().split('T')[0];
-const fmtDate=d=>(DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()).toUpperCase();
-const getWeekKey=()=>{const d=new Date();const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);return m.toISOString().split('T')[0];};
+var DAY_NOTES=[
+  'Rest up — it is Sunday.',
+  'New week, fresh start.',
+  'Deep focus day.',
+  'Midweek — keep the momentum.',
+  'Almost there.',
+  'Reset and recharge.',
+  'Enjoy the weekend.'
+];
 
-function getAutoBlock(){
-  const h=new Date().getHours();
-  if(h<10)return 'morning';
-  if(h<15)return 'work';
-  if(h<17)return 'life';
-  if(h<21)return 'leisure';
-  return 'bedtime';
-}
+var DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-function dailyDelight(items,offset){
-  if(!items.length)return null;
-  const d=addDays(new Date(),offset);
-  const seed=parseInt(dateStr(d).replace(/-/g,''));
-  return items[seed%items.length];
-}
+function todayStr(){return new Date().toISOString().split('T')[0];}
+function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function dateStr(d){return d.toISOString().split('T')[0];}
+function fmtDate(d){return (DAYS[d.getDay()]+', '+MONTHS[d.getMonth()]+' '+d.getDate()).toUpperCase();}
+function getWeekKey(){var d=new Date();var day=d.getDay();var diff=d.getDate()-day+(day===0?-6:1);var m=new Date(d);m.setDate(diff);return m.toISOString().split('T')[0];}
+function getAutoBlock(){var h=new Date().getHours();if(h<10)return'morning';if(h<15)return'work';if(h<17)return'life';if(h<21)return'leisure';return'bedtime';}
+function dailyDelight(items,offset){if(!items.length)return null;var d=addDays(new Date(),offset);var seed=parseInt(dateStr(d).replace(/-/g,''));return items[seed%items.length];}
+function suggestDay(due){if(!due)return null;var d=new Date(due+'T12:00:00');var dow=d.getDay();if(dow===1||dow===5)return null;var daysToFri=((5-dow+7)%7)||7;var fri=addDays(d,-daysToFri);if(fri>=new Date())return'Friday '+fri.toLocaleDateString('en-US',{month:'short',day:'numeric'});return null;}
 
-function suggestDay(due){
-  if(!due)return null;
-  const d=new Date(due+'T12:00:00');
-  const dow=d.getDay();
-  if(dow===1||dow===5)return null;
-  const daysToFri=((5-dow+7)%7)||7;
-  const fri=addDays(d,-daysToFri);
-  if(fri>=new Date())return'Friday '+fri.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  return null;
-}
-
-// SVG checkmark
-const Chk=()=><svg width="11" height="11" viewBox="0 0 11 11"><polyline points="2,5.5 4.5,8 9,3" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-
-// Checkbox box
-function CkBox({done,color,onClick,light}){
-  return(
-    <div onClick={onClick} style={{
-      width:19,height:19,border:`1.5px solid ${done?color:(light?'rgba(255,255,255,0.3)':'rgba(58,42,26,0.2)')}`,
-      background:done?color:'transparent',flexShrink:0,
-      display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',
-    }}>
-      {done&&<Chk/>}
-    </div>
+function Chk(){
+  return React.createElement('svg',{width:11,height:11,viewBox:'0 0 11 11'},
+    React.createElement('polyline',{points:'2,5.5 4.5,8 9,3',stroke:'#fff',strokeWidth:1.5,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})
   );
 }
 
-// CheckRow
-function CheckRow({id,text,note,color,checks,toggle,isLast}){
-  const done=!!checks[id];
-  return(
-    <div onClick={()=>toggle(id)} style={{
-      display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',
-      borderBottom:isLast?'none':`0.5px solid rgba(58,42,26,0.1)`,cursor:'pointer',
-    }}>
-      <CkBox done={done} color={color} />
-      <div style={{flex:1,marginTop:1}}>
-        <span style={{fontSize:13,textDecoration:done?'line-through':'none',opacity:done?0.4:1}}>{text}</span>
-        {note&&<div style={{fontFamily:CP,fontSize:10,color:P.muted,marginTop:2}}>{note}</div>}
-      </div>
-    </div>
+function CkBox(props){
+  var done=props.done,color=props.color,onClick=props.onClick,light=props.light;
+  return React.createElement('div',{onClick:onClick,style:{width:19,height:19,border:'1.5px solid '+(done?color:(light?'rgba(255,255,255,0.3)':'rgba(58,42,26,0.2)')),background:done?color:'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}},done?React.createElement(Chk):null);
+}
+
+function CheckRow(props){
+  var id=props.id,text=props.text,note=props.note,color=props.color,checks=props.checks,toggle=props.toggle,isLast=props.isLast;
+  var done=!!checks[id];
+  return React.createElement('div',{onClick:function(){toggle(id);},style:{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)',cursor:'pointer'}},
+    React.createElement(CkBox,{done:done,color:color}),
+    React.createElement('div',{style:{flex:1,marginTop:1}},
+      React.createElement('span',{style:{fontSize:13,textDecoration:done?'line-through':'none',opacity:done?0.4:1}},text),
+      note?React.createElement('div',{style:{fontFamily:CP,fontSize:10,color:P.muted,marginTop:2}},note):null
+    )
   );
 }
 
-// Hair bottom sheet
-function HairSheet({onClose,lastHairWash,setLastHairWash}){
-  const suggested=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
-  const [sel,setSel]=useState(suggested);
-  const proto=HAIR[sel];
-  const pick=k=>{setSel(k);setLastHairWash(k);window.storage.set('ds-lasthairwash',k).catch(()=>{});};
-  return(
-    <div style={{position:'fixed',inset:0,zIndex:200}}>
-      <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(58,42,26,0.55)'}}/>
-      <div style={{position:'absolute',bottom:0,left:0,right:0,background:P.sand,maxHeight:'86vh',overflowY:'auto'}}>
-        <div style={{display:'flex',justifyContent:'center',padding:'12px 0 4px'}}>
-          <div style={{width:36,height:4,background:P.border}}/>
-        </div>
-        <div style={{padding:'4px 20px 48px'}}>
-          <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:14}}>Hair Wash Protocol</div>
-          <div style={{display:'flex',gap:6,marginBottom:18}}>
-            {['A','B','C'].map(k=>(
-              <button key={k} onClick={()=>pick(k)} style={{
-                flex:1,padding:'10px 6px',border:`1.5px solid ${sel===k?HAIR[k].color:P.border}`,
-                background:sel===k?HAIR[k].color+'18':P.sandCard,cursor:'pointer',fontFamily:CP,
-              }}>
-                <div style={{fontSize:11,fontWeight:'bold',color:HAIR[k].color,letterSpacing:'0.06em'}}>{HAIR[k].tag}</div>
-                <div style={{fontSize:10,color:P.muted,marginTop:2,lineHeight:1.3}}>{HAIR[k].label}</div>
-              </button>
-            ))}
-          </div>
-          <div style={{fontFamily:CP,fontSize:11,color:P.muted,fontStyle:'italic',marginBottom:16}}>
-            {proto.subtitle}{lastHairWash&&' · last: '+HAIR[lastHairWash]?.tag}
-          </div>
-          {proto.sections.map((sec,si)=>(
-            <div key={si} style={{marginBottom:16}}>
-              <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,marginBottom:8}}>{sec.h}</div>
-              {sec.items.map((item,ii)=>(
-                <div key={ii} style={{display:'flex',gap:10,padding:'8px 0',borderBottom:`0.5px solid ${P.border}`,alignItems:'flex-start'}}>
-                  <div style={{width:5,height:5,background:proto.color,flexShrink:0,marginTop:5}}/>
-                  <span style={{fontSize:13,lineHeight:1.45,color:P.ink}}>{item}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+function HairSheet(props){
+  var onClose=props.onClose,lastHairWash=props.lastHairWash,setLastHairWash=props.setLastHairWash;
+  var suggested=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
+  var _s=useState(suggested),sel=_s[0],setSel=_s[1];
+  var proto=HAIR[sel];
+  function pick(k){setSel(k);setLastHairWash(k);window.storage.set('ds-lasthairwash',k).catch(function(){});}
+
+  return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:200}},
+    React.createElement('div',{onClick:onClose,style:{position:'absolute',inset:0,background:'rgba(58,42,26,0.55)'}}),
+    React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:P.sand,maxHeight:'86vh',overflowY:'auto'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',padding:'12px 0 4px'}},
+        React.createElement('div',{style:{width:36,height:4,background:P.border}})
+      ),
+      React.createElement('div',{style:{padding:'4px 20px 48px'}},
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:14}},'Hair Wash Protocol'),
+        React.createElement('div',{style:{display:'flex',gap:6,marginBottom:18}},
+          ['A','B','C'].map(function(k){
+            return React.createElement('button',{key:k,onClick:function(){pick(k);},style:{flex:1,padding:'10px 6px',border:'1.5px solid '+(sel===k?HAIR[k].color:P.border),background:sel===k?HAIR[k].color+'18':P.sandCard,cursor:'pointer',fontFamily:CP,borderRadius:0}},
+              React.createElement('div',{style:{fontSize:11,fontWeight:'bold',color:HAIR[k].color,letterSpacing:'0.06em'}},HAIR[k].tag),
+              React.createElement('div',{style:{fontSize:10,color:P.muted,marginTop:2,lineHeight:1.3}},HAIR[k].label)
+            );
+          })
+        ),
+        React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:P.muted,fontStyle:'italic',marginBottom:16}},proto.subtitle+(lastHairWash?' — last: '+HAIR[lastHairWash].tag:'')),
+        proto.sections.map(function(sec,si){
+          return React.createElement('div',{key:si,style:{marginBottom:16}},
+            React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,marginBottom:8}},sec.h),
+            sec.items.map(function(item,ii){
+              return React.createElement('div',{key:ii,style:{display:'flex',gap:10,padding:'8px 0',borderBottom:'0.5px solid '+P.border,alignItems:'flex-start'}},
+                React.createElement('div',{style:{width:5,height:5,background:proto.color,flexShrink:0,marginTop:5}}),
+                React.createElement('span',{style:{fontSize:13,lineHeight:1.45,color:P.ink}},item)
+              );
+            })
+          );
+        })
+      )
+    )
   );
 }
 
-// Task card
-function TaskCard({task,onToggle,onDelete}){
-  const PC={
-    high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},
-    mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},
-    low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'},
-  };
-  const pc=PC[task.priority||'mid'];
-  const overdue=task.dueDate&&task.dueDate<todayStr()&&!task.done;
-  return(
-    <div style={{background:P.sandCard,border:`0.5px solid ${overdue?P.poppy:P.border}`,padding:'11px 12px',opacity:task.done?0.5:1}}>
-      <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-        <CkBox done={task.done} color={P.grass} onClick={()=>onToggle(task.id)}/>
-        <div style={{flex:1}}>
-          <div style={{fontSize:14,textDecoration:task.done?'line-through':'none',marginBottom:5,lineHeight:1.4}}>{task.text}</div>
-          <div style={{display:'flex',gap:3,flexWrap:'wrap',alignItems:'center'}}>
-            <span style={{fontFamily:CP,fontSize:9,padding:'2px 6px',background:pc.bg,color:pc.color,border:`0.5px solid ${pc.border}`}}>
-              {(task.priority||'mid').charAt(0).toUpperCase()+(task.priority||'mid').slice(1)}
-            </span>
-            {task.dueDate&&(
-              <span style={{fontFamily:CP,fontSize:9,color:overdue?P.poppy:P.muted}}>
-                {overdue?'⚠ overdue · ':'due '}
-                {new Date(task.dueDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-              </span>
-            )}
-            <span style={{fontFamily:CP,fontSize:9,padding:'2px 6px',
-              background:task.type==='work'?'#E0DCC4':'#E8D8C4',
-              color:task.type==='work'?'#5A4F1A':P.ash,
-              border:`0.5px solid ${task.type==='work'?'#B8A870':'#C8B080'}`}}>
-              {task.type==='work'?'Work':'Personal'}
-            </span>
-            {task.recurring&&task.recurring!=='none'&&(
-              <span style={{fontFamily:CP,fontSize:9,padding:'2px 6px',background:'#E0DCC4',color:'#5A4F1A',border:'0.5px solid #B8A870'}}>Recurring</span>
-            )}
-            {task.suggestedDay&&!task.done&&(
-              <span style={{fontFamily:CP,fontSize:9,color:P.terra}}>→ {task.suggestedDay}</span>
-            )}
-          </div>
-          {task.notes&&<div style={{fontSize:12,color:P.muted,marginTop:4,fontStyle:'italic'}}>{task.notes}</div>}
-        </div>
-        <button onClick={()=>onDelete(task.id)} style={{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:16,padding:'0 2px',flexShrink:0}}>×</button>
-      </div>
-    </div>
+function TaskCard(props){
+  var task=props.task,onToggle=props.onToggle,onDelete=props.onDelete;
+  var PC={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
+  var pc=PC[task.priority||'mid'];
+  var overdue=task.dueDate&&task.dueDate<todayStr()&&!task.done;
+  var pri=task.priority||'mid';
+  var priLabel=pri.charAt(0).toUpperCase()+pri.slice(1);
+  return React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+(overdue?P.poppy:P.border),padding:'11px 12px',opacity:task.done?0.5:1}},
+    React.createElement('div',{style:{display:'flex',gap:10,alignItems:'flex-start'}},
+      React.createElement(CkBox,{done:task.done,color:P.grass,onClick:function(){onToggle(task.id);}}),
+      React.createElement('div',{style:{flex:1}},
+        React.createElement('div',{style:{fontSize:14,textDecoration:task.done?'line-through':'none',marginBottom:5,lineHeight:1.4}},task.text),
+        React.createElement('div',{style:{display:'flex',gap:3,flexWrap:'wrap',alignItems:'center'}},
+          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:pc.bg,color:pc.color,border:'0.5px solid '+pc.border}},priLabel),
+          task.dueDate?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:overdue?P.poppy:P.muted}},(overdue?'overdue — ':'due ')+new Date(task.dueDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})):null,
+          React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:task.type==='work'?'#E0DCC4':task.type==='leisure'?'#F0E0DA':'#E8D8C4',color:task.type==='work'?'#5A4F1A':task.type==='leisure'?'#5A2038':P.ash,border:'0.5px solid '+(task.type==='work'?'#B8A870':task.type==='leisure'?'#C8A0B0':'#C8B080')}},task.type==='work'?'Work':task.type==='leisure'?'Leisure':'Personal'),
+          task.recurring&&task.recurring!=='none'?React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:'#E0DCC4',color:'#5A4F1A',border:'0.5px solid #B8A870'}},'Recurring'):null,
+          task.suggestedDay&&!task.done?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.terra}},'— '+task.suggestedDay):null
+        ),
+        task.notes?React.createElement('div',{style:{fontSize:12,color:P.muted,marginTop:4,fontStyle:'italic'}},task.notes):null
+      ),
+      React.createElement('button',{onClick:function(){onDelete(task.id);},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:16,padding:'0 2px',flexShrink:0}},'x')
+    )
   );
 }
 
-// Add task form
-function AddTaskForm({onAdd}){
-  const [text,setText]=useState('');
-  const [priority,setPriority]=useState('mid');
-  const [type,setType]=useState('personal');
-  const [dueDate,setDueDate]=useState('');
-  const [notes,setNotes]=useState('');
-  const [recurring,setRecurring]=useState('none');
-  const [open,setOpen]=useState(false);
-  const PC={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
+function AddTaskForm(props){
+  var onAdd=props.onAdd;
+  var _t=useState(''),text=_t[0],setText=_t[1];
+  var _p=useState('mid'),priority=_p[0],setPriority=_p[1];
+  var _ty=useState('personal'),type=_ty[0],setType=_ty[1];
+  var _d=useState(''),dueDate=_d[0],setDueDate=_d[1];
+  var _n=useState(''),notes=_n[0],setNotes=_n[1];
+  var _r=useState('none'),recurring=_r[0],setRecurring=_r[1];
+  var _o=useState(false),open=_o[0],setOpen=_o[1];
+  var PC={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
 
-  const submit=()=>{
+  function submit(){
     if(!text.trim())return;
-    onAdd({id:'t'+Date.now(),text:text.trim(),priority,type,dueDate:dueDate||null,
-      notes:notes.trim()||null,done:false,recurring,suggestedDay:dueDate?suggestDay(dueDate):null});
+    onAdd({id:'t'+Date.now(),text:text.trim(),priority:priority,type:type,dueDate:dueDate||null,notes:notes.trim()||null,done:false,recurring:recurring,suggestedDay:dueDate?suggestDay(dueDate):null});
     setText('');setPriority('mid');setType('personal');setDueDate('');setNotes('');setRecurring('none');setOpen(false);
-  };
+  }
 
-  return(
-    <div style={{border:`0.5px solid ${P.border}`,background:P.sandCard,marginBottom:10}}>
-      <div style={{display:'flex',gap:8,padding:'10px 12px',alignItems:'center'}}>
-        <input value={text} onChange={e=>setText(e.target.value)}
-          onKeyDown={e=>e.key==='Enter'&&!open&&submit()}
-          placeholder="Add a task..."
-          style={{flex:1,fontFamily:GEO,fontSize:14,fontStyle:'italic',color:`${P.ink} !important`,
-            WebkitTextFillColor:P.ink,border:'none',background:'transparent',outline:'none'}}
-        />
-        <button onClick={()=>setOpen(o=>!o)} style={{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:20,padding:0,flexShrink:0,lineHeight:1}}>
-          {open?'−':'+'}
-        </button>
-      </div>
-      {open&&(
-        <div style={{borderTop:`0.5px solid ${P.border}`,padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
-          <div>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}}>Priority</div>
-            <div style={{display:'flex',gap:4}}>
-              {['high','mid','low'].map(p=>(
-                <button key={p} onClick={()=>setPriority(p)} style={{
-                  padding:'3px 10px',border:`0.5px solid ${priority===p?PC[p].color:P.border}`,
-                  background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,
-                  fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',
-                }}>{p.charAt(0).toUpperCase()+p.slice(1)}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}}>Type</div>
-            <div style={{display:'flex',gap:4}}>
-              {[['personal','Personal'],['work','Work']].map(([v,l])=>(
-                <button key={v} onClick={()=>setType(v)} style={{
-                  padding:'3px 10px',border:`0.5px solid ${type===v?P.ash:P.border}`,
-                  background:type===v?'#E8D8C4':'transparent',color:type===v?P.ash:P.muted,
-                  fontFamily:CP,fontSize:10,cursor:'pointer',
-                }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}}>Due date (optional)</div>
-            <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}
-              style={{border:`0.5px solid ${P.border}`,padding:'5px 8px',fontFamily:CP,
-                fontSize:12,background:'transparent',color:P.ink,outline:'none'}}/>
-          </div>
-          <div>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}}>Recurring</div>
-            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-              {[['none','One-time'],['weekly','Weekly'],['monthly-last','Monthly — last day']].map(([v,l])=>(
-                <button key={v} onClick={()=>setRecurring(v)} style={{
-                  padding:'3px 8px',border:`0.5px solid ${recurring===v?P.grass:P.border}`,
-                  background:recurring===v?'#E0DCC4':'transparent',color:recurring===v?'#5A4F1A':P.muted,
-                  fontFamily:CP,fontSize:9,cursor:'pointer',
-                }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}}>Notes (optional)</div>
-            <input value={notes} onChange={e=>setNotes(e.target.value)}
-              placeholder="e.g. need to look up location first"
-              style={{width:'100%',border:`0.5px solid ${P.border}`,padding:'5px 8px',
-                fontFamily:GEO,fontSize:12,fontStyle:'italic',background:'transparent',
-                color:P.ink,WebkitTextFillColor:P.ink,outline:'none'}}/>
-          </div>
-          <button onClick={submit} style={{
-            background:P.poppy,color:'#FDF0E8',border:'none',
-            padding:'9px',fontFamily:CP,fontSize:12,cursor:'pointer',letterSpacing:'0.06em',
-          }}>Add task</button>
-        </div>
-      )}
-    </div>
+  return React.createElement('div',{style:{border:'0.5px solid '+P.border,background:P.sandCard,marginBottom:10}},
+    React.createElement('div',{style:{display:'flex',gap:8,padding:'10px 12px',alignItems:'center'}},
+      React.createElement('input',{value:text,onChange:function(e){setText(e.target.value);},onKeyDown:function(e){if(e.key==='Enter'&&!open)submit();},placeholder:'Add a task...',style:{flex:1,fontFamily:GEO,fontSize:14,fontStyle:'italic',color:P.ink,WebkitTextFillColor:P.ink,border:'none',background:'transparent',outline:'none'}}),
+      React.createElement('button',{onClick:function(){setOpen(function(o){return!o;});},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:20,padding:0,flexShrink:0,lineHeight:1}},open?'-':'+')
+    ),
+    open?React.createElement('div',{style:{borderTop:'0.5px solid '+P.border,padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Priority'),
+        React.createElement('div',{style:{display:'flex',gap:4}},
+          ['high','mid','low'].map(function(p){
+            return React.createElement('button',{key:p,onClick:function(){setPriority(p);},style:{padding:'3px 10px',border:'0.5px solid '+(priority===p?PC[p].color:P.border),background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));
+          })
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Type'),
+        React.createElement('div',{style:{display:'flex',gap:4}},
+          [['personal','Personal'],['work','Work'],['leisure','Leisure']].map(function(item){
+            var v=item[0],l=item[1];
+            return React.createElement('button',{key:v,onClick:function(){setType(v);},style:{padding:'3px 10px',border:'0.5px solid '+(type===v?P.ash:P.border),background:type===v?'#E8D8C4':'transparent',color:type===v?P.ash:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},l);
+          })
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Due date (optional)'),
+        React.createElement('input',{type:'date',value:dueDate,onChange:function(e){setDueDate(e.target.value);},style:{border:'0.5px solid '+P.border,padding:'5px 8px',fontFamily:CP,fontSize:12,background:'transparent',color:P.ink,outline:'none',borderRadius:0}})
+      ),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Recurring'),
+        React.createElement('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
+          [['none','One-time'],['weekly','Weekly'],['monthly-last','Monthly — last day']].map(function(item){
+            var v=item[0],l=item[1];
+            return React.createElement('button',{key:v,onClick:function(){setRecurring(v);},style:{padding:'3px 8px',border:'0.5px solid '+(recurring===v?P.grass:P.border),background:recurring===v?'#E0DCC4':'transparent',color:recurring===v?'#5A4F1A':P.muted,fontFamily:CP,fontSize:9,cursor:'pointer',borderRadius:0}},l);
+          })
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Notes (optional)'),
+        React.createElement('input',{value:notes,onChange:function(e){setNotes(e.target.value);},placeholder:'e.g. need to look up location first',style:{width:'100%',border:'0.5px solid '+P.border,padding:'5px 8px',fontFamily:GEO,fontSize:12,fontStyle:'italic',background:'transparent',color:P.ink,WebkitTextFillColor:P.ink,outline:'none',borderRadius:0}})
+      ),
+      React.createElement('button',{onClick:submit,style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'9px',fontFamily:CP,fontSize:12,cursor:'pointer',letterSpacing:'0.06em',borderRadius:0}},'Add task')
+    ):null
   );
 }
 
-// Intention prompt
-function IntentionPrompt({value,onChange}){
-  const [editing,setEditing]=useState(false);
-  const [draft,setDraft]=useState(value||'');
-  const save=()=>{if(draft.trim()){onChange(draft.trim());setEditing(false);}};
-  return(
-    <div style={{background:P.sandCard,border:`1.5px solid ${P.poppy}`,padding:'16px 18px'}}>
-      <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:10}}>Today's one thing</div>
-      {editing?(
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <input autoFocus value={draft} onChange={e=>setDraft(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&save()}
-            placeholder="What matters most today?"
-            style={{flex:1,fontFamily:GEO,fontSize:14,fontStyle:'italic',
-              color:P.ink,WebkitTextFillColor:P.ink,border:'none',
-              borderBottom:`1px solid ${P.poppy}`,background:'transparent',padding:'4px 0',outline:'none'}}
-          />
-          <button onClick={save} style={{background:P.poppy,color:'#FDF0E8',border:'none',padding:'5px 12px',fontFamily:CP,fontSize:11,cursor:'pointer'}}>Set</button>
-        </div>
-      ):(
-        <div onClick={()=>{setDraft(value||'');setEditing(true);}} style={{cursor:'pointer'}}>
-          {value
-            ?<div style={{fontSize:15,fontStyle:'italic',lineHeight:1.45,color:P.ink}}>{value}</div>
-            :<div style={{fontSize:14,fontStyle:'italic',color:P.muted}}>Tap to set today's intention...</div>
-          }
-          {value&&<div style={{fontFamily:CP,fontSize:11,color:P.poppy,marginTop:6}}>edit</div>}
-        </div>
-      )}
-    </div>
+function IntentionPrompt(props){
+  var value=props.value,onChange=props.onChange;
+  var _e=useState(false),editing=_e[0],setEditing=_e[1];
+  var _d=useState(value||''),draft=_d[0],setDraft=_d[1];
+  function save(){if(draft.trim()){onChange(draft.trim());setEditing(false);}}
+  return React.createElement('div',{style:{background:P.sandCard,border:'1.5px solid '+P.poppy,padding:'16px 18px'}},
+    React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:10}},"Today's one thing"),
+    editing?
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+        React.createElement('input',{autoFocus:true,value:draft,onChange:function(e){setDraft(e.target.value);},onKeyDown:function(e){if(e.key==='Enter')save();},placeholder:"What matters most today?",style:{flex:1,fontFamily:GEO,fontSize:14,fontStyle:'italic',color:P.ink,WebkitTextFillColor:P.ink,border:'none',borderBottom:'1px solid '+P.poppy,background:'transparent',padding:'4px 0',outline:'none'}}),
+        React.createElement('button',{onClick:save,style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'5px 12px',fontFamily:CP,fontSize:11,cursor:'pointer',borderRadius:0}},'Set')
+      ):
+      React.createElement('div',{onClick:function(){setDraft(value||'');setEditing(true);},style:{cursor:'pointer'}},
+        value?
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:15,fontStyle:'italic',lineHeight:1.45,color:P.ink}},value),
+            React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:P.poppy,marginTop:6}},'edit')
+          ):
+          React.createElement('div',{style:{fontSize:14,fontStyle:'italic',color:P.muted}},"Tap to set today's intention...")
+      )
   );
 }
 
-// Main App
 function App(){
-  const [tab,setTab]=useState(0);
-  const [dayOffset,setDayOffset]=useState(0);
-  const [checks,setChecks]=useState({});
-  const [tasks,setTasks]=useState([]);
-  const [joyItems,setJoyItems]=useState(DEFAULT_JOY);
-  const [newJoy,setNewJoy]=useState('');
-  const [intention,setIntention]=useState('');
-  const [lastHairWash,setLastHairWash]=useState(null);
-  const [jobCount,setJobCount]=useState({week:getWeekKey(),count:0});
-  const [openBlock,setOpenBlock]=useState(getAutoBlock());
-  const [hairSheet,setHairSheet]=useState(false);
-  const [taskFilter,setTaskFilter]=useState('all');
-  const [taskSort,setTaskSort]=useState('priority');
-  const [loaded,setLoaded]=useState(false);
+  var _tab=useState(0),tab=_tab[0],setTab=_tab[1];
+  var _off=useState(0),dayOffset=_off[0],setDayOffset=_off[1];
+  var _chk=useState({}),checks=_chk[0],setChecks=_chk[1];
+  var _tasks=useState([]),tasks=_tasks[0],setTasks=_tasks[1];
+  var _joy=useState(DEFAULT_JOY),joyItems=_joy[0],setJoyItems=_joy[1];
+  var _nj=useState(''),newJoy=_nj[0],setNewJoy=_nj[1];
+  var _int=useState(''),intention=_int[0],setIntention=_int[1];
+  var _lhw=useState(null),lastHairWash=_lhw[0],setLastHairWash=_lhw[1];
+  var _jc=useState({week:getWeekKey(),count:0}),jobCount=_jc[0],setJobCount=_jc[1];
+  var _ob=useState(getAutoBlock()),openBlock=_ob[0],setOpenBlock=_ob[1];
+  var _hs=useState(false),hairSheet=_hs[0],setHairSheet=_hs[1];
+  var _tf=useState('all'),taskFilter=_tf[0],setTaskFilter=_tf[1];
+  var _ts=useState('priority'),taskSort=_ts[0],setTaskSort=_ts[1];
+  var _ld=useState(false),loaded=_ld[0],setLoaded=_ld[1];
 
-  useEffect(()=>{
-    (async()=>{
-      try{const r=await window.storage.get('ds-checks');if(r){const p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(_){}
-      try{const r=await window.storage.get('ds-tasks');if(r)setTasks(JSON.parse(r.value));}catch(_){}
-      try{const r=await window.storage.get('ds-joy');if(r){const parsed=JSON.parse(r.value);if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){setJoyItems(parsed.map(function(i){return i.text;}));}else{setJoyItems(parsed);}}}catch(_){}
-      try{const r=await window.storage.get('ds-intention');if(r){const p=JSON.parse(r.value);if(p.date===todayStr())setIntention(p.text||'');}}catch(_){}
-      try{const r=await window.storage.get('ds-lasthairwash');if(r)setLastHairWash(r.value);}catch(_){}
-      try{const r=await window.storage.get('ds-jobcount');if(r){const p=JSON.parse(r.value);if(p.week===getWeekKey())setJobCount(p);}}catch(_){}
+  useEffect(function(){
+    (async function(){
+      try{var r=await window.storage.get('ds-checks');if(r){var p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(e){}
+      try{var r2=await window.storage.get('ds-tasks');if(r2)setTasks(JSON.parse(r2.value));}catch(e){}
+      try{
+        var r3=await window.storage.get('ds-joy');
+        if(r3){
+          var parsed=JSON.parse(r3.value);
+          if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){
+            setJoyItems(parsed.map(function(i){return i.text;}));
+          } else {
+            setJoyItems(parsed);
+          }
+        }
+      }catch(e){}
+      try{var r4=await window.storage.get('ds-intention');if(r4){var p4=JSON.parse(r4.value);if(p4.date===todayStr())setIntention(p4.text||'');}}catch(e){}
+      try{var r5=await window.storage.get('ds-lasthairwash');if(r5)setLastHairWash(r5.value);}catch(e){}
+      try{var r6=await window.storage.get('ds-jobcount');if(r6){var p6=JSON.parse(r6.value);if(p6.week===getWeekKey())setJobCount(p6);}}catch(e){}
       setLoaded(true);
     })();
   },[]);
 
-  useEffect(()=>{if(!loaded)return;window.storage.set('ds-checks',JSON.stringify({date:todayStr(),checks})).catch(()=>{});},[checks,loaded]);
-  useEffect(()=>{if(!loaded)return;window.storage.set('ds-tasks',JSON.stringify(tasks)).catch(()=>{});},[tasks,loaded]);
-  useEffect(()=>{if(!loaded)return;window.storage.set('ds-joy',JSON.stringify(joyItems)).catch(()=>{});},[joyItems,loaded]);
-  useEffect(()=>{if(!loaded)return;window.storage.set('ds-intention',JSON.stringify({date:todayStr(),text:intention})).catch(()=>{});},[intention,loaded]);
-  useEffect(()=>{if(!loaded)return;window.storage.set('ds-jobcount',JSON.stringify(jobCount)).catch(()=>{});},[jobCount,loaded]);
+  useEffect(function(){if(!loaded)return;window.storage.set('ds-checks',JSON.stringify({date:todayStr(),checks:checks})).catch(function(){});},[checks,loaded]);
+  useEffect(function(){if(!loaded)return;window.storage.set('ds-tasks',JSON.stringify(tasks)).catch(function(){});},[tasks,loaded]);
+  useEffect(function(){if(!loaded)return;window.storage.set('ds-joy',JSON.stringify(joyItems)).catch(function(){});},[joyItems,loaded]);
+  useEffect(function(){if(!loaded)return;window.storage.set('ds-intention',JSON.stringify({date:todayStr(),text:intention})).catch(function(){});},[intention,loaded]);
+  useEffect(function(){if(!loaded)return;window.storage.set('ds-jobcount',JSON.stringify(jobCount)).catch(function(){});},[jobCount,loaded]);
 
-  const toggle=useCallback(id=>setChecks(prev=>({...prev,[id]:!prev[id]})),[]);
-  const toggleTask=id=>setTasks(prev=>prev.map(t=>t.id===id?{...t,done:!t.done}:t));
-  const deleteTask=id=>setTasks(prev=>prev.filter(t=>t.id!==id));
-  const addTask=task=>setTasks(prev=>[task,...prev]);
-  const toggleBlock=id=>setOpenBlock(prev=>prev===id?null:id);
-  const incJob=()=>setJobCount(prev=>({week:getWeekKey(),count:prev.week===getWeekKey()?prev.count+1:1}));
+  var toggle=useCallback(function(id){setChecks(function(prev){var n=Object.assign({},prev);n[id]=!n[id];return n;});},[]);
+  function toggleTask(id){setTasks(function(prev){return prev.map(function(t){return t.id===id?Object.assign({},t,{done:!t.done}):t;});});}
+  function deleteTask(id){setTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});}
+  function addTask(task){setTasks(function(prev){return[task].concat(prev);});}
+  function toggleBlock(id){setOpenBlock(function(prev){return prev===id?null:id;});}
+  function incJob(){setJobCount(function(prev){return{week:getWeekKey(),count:prev.week===getWeekKey()?prev.count+1:1};});}
 
-  const viewDate=addDays(new Date(),dayOffset);
-  const viewDow=viewDate.getDay();
-  const viewKey=dateStr(viewDate);
-  const isToday=dayOffset===0;
-  const isHairWashDay=viewDow===3||viewDow===5; // Wed, Fri default
-  const isWeekend=viewDow===0||viewDow===6;
+  var viewDate=addDays(new Date(),dayOffset);
+  var viewDow=viewDate.getDay();
+  var viewKey=dateStr(viewDate);
+  var isToday=dayOffset===0;
+  var isHairWashDay=viewDow===3||viewDow===5;
 
-  const submitted=jobCount.week===getWeekKey()?jobCount.count:0;
-  const jobLeft=Math.max(0,10-submitted);
-  const tasksDueToday=tasks.filter(t=>!t.done&&t.dueDate===viewKey);
-  const highPriOpen=tasks.filter(t=>!t.done&&t.priority==='high');
-  const todayDelight=dailyDelight(joyItems,dayOffset);
+  var submitted=jobCount.week===getWeekKey()?jobCount.count:0;
+  var jobLeft=Math.max(0,10-submitted);
+  var tasksDueToday=tasks.filter(function(t){return!t.done&&t.dueDate===viewKey;});
+  var highPriOpen=tasks.filter(function(t){return!t.done&&t.priority==='high';});
+  var todayDelight=dailyDelight(joyItems,dayOffset);
+  var dayNote=DAY_NOTES[viewDate.getDay()]||'';
 
-  // Last day of month recurring tasks
-  const today=new Date();
-  const lastDay=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
-  const isLastDayOfMonth=today.getDate()===lastDay;
+  var today=new Date();
+  var lastDay=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  var isLastDayOfMonth=isToday&&today.getDate()===lastDay;
 
-  const priOrder={high:0,mid:1,low:2};
-  const filteredTasks=[...tasks]
-    .filter(t=>taskFilter==='all'||t.type===taskFilter)
-    .sort((a,b)=>taskSort==='priority'
-      ?(priOrder[a.priority||'mid']||1)-(priOrder[b.priority||'mid']||1)
-      :(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+  var priOrder={high:0,mid:1,low:2};
+  var filteredTasks=tasks.filter(function(t){return taskFilter==='all'||t.type===taskFilter;}).sort(function(a,b){
+    if(taskSort==='priority')return(priOrder[a.priority||'mid']||1)-(priOrder[b.priority||'mid']||1);
+    return(a.dueDate||'9999').localeCompare(b.dueDate||'9999');
+  });
 
-  // Build block items
-  function blockItems(blockId){
-    const pfx=`${viewKey}-${blockId}`;
+  function buildBlockItems(blockId){
+    var pfx=viewKey+'-'+blockId;
     if(blockId==='morning'){
+      var showerItem=isHairWashDay?{id:pfx+'-hair',text:'Hair wash shower',isHairWash:true}:{id:pfx+'-shower',text:'Shower'};
       return[
-        {id:`${pfx}-wake`,text:'Wake up + out of bed'},
-        {id:`${pfx}-teeth`,text:'Brush teeth'},
-        {id:`${pfx}-skin`,text:'AM skincare'},
-        {id:`${pfx}-meds`,text:'Medication',note:'30-60 min before eating or drinking'},
-        {id:`${pfx}-workout`,text:'Workout — treadmill or hoop'},
-        isHairWashDay
-          ?{id:`${pfx}-hair`,text:'Hair wash shower',isHairWash:true}
-          :{id:`${pfx}-shower`,text:'Shower'},
-        {id:`${pfx}-lotion`,text:'Lotion + body care'},
-        {id:`${pfx}-bfast`,text:'Eat a healthy breakfast'},
-        {id:`${pfx}-vits`,text:'Vitamins'},
-        {id:`${pfx}-water`,text:'First bottle of water'},
+        {id:pfx+'-wake',text:'Wake up + out of bed'},
+        {id:pfx+'-teeth',text:'Brush teeth'},
+        {id:pfx+'-skin',text:'AM skincare'},
+        {id:pfx+'-meds',text:'Medication',note:'30-60 min before eating or drinking'},
+        {id:pfx+'-workout',text:'Workout — treadmill or hoop'},
+        showerItem,
+        {id:pfx+'-lotion',text:'Lotion + body care'},
+        {id:pfx+'-bfast',text:'Eat a healthy breakfast'},
+        {id:pfx+'-vits',text:'Vitamins'},
+        {id:pfx+'-water',text:'First bottle of water'}
       ];
     }
     if(blockId==='work'){
-      const wt=tasks.filter(t=>!t.done&&t.type==='work');
-      return[
-        {id:`${pfx}-search`,text:'Job search — triage new listings'},
-        {id:`${pfx}-app`,text:'Submit one job application'},
-        ...wt.map(t=>({id:`${pfx}-wt-${t.id}`,text:t.text})),
-      ];
+      var wt=tasks.filter(function(t){return!t.done&&t.type==='work';});
+      var base=[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}];
+      return base.concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text};}));
     }
     if(blockId==='life'){
-      const pt=tasks.filter(t=>!t.done&&t.type==='personal'&&(t.dueDate===viewKey||!t.dueDate));
-      return[
-        {id:`${pfx}-admin`,text:'Life admin — pick one task to complete or advance'},
-        ...pt.slice(0,4).map(t=>({id:`${pfx}-lt-${t.id}`,text:t.text})),
-      ];
+      var pt=tasks.filter(function(t){return!t.done&&t.type==='personal'&&(t.dueDate===viewKey||!t.dueDate);});
+      var base2=[{id:pfx+'-admin',text:'Life admin — pick one task to complete or advance'}];
+      return base2.concat(pt.slice(0,4).map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
     }
     if(blockId==='leisure'){
-      return todayDelight?[{id:`${pfx}-delight`,text:todayDelight,isDelight:true}]:[];
+      var lt=tasks.filter(function(t){return!t.done&&t.type==='leisure';});
+      var base=[];
+      if(todayDelight)base.push({id:pfx+'-delight',text:todayDelight,isDelight:true});
+      return base.concat(lt.map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
     }
     if(blockId==='bedtime'){
       return[
-        {id:`${pfx}-bt-teeth`,text:'Brush teeth'},
-        {id:`${pfx}-bt-skin`,text:'PM skincare'},
-        {id:`${pfx}-bt-meds`,text:'Meds'},
-        {id:`${pfx}-bt-deo`,text:'Deodorant'},
-        {id:`${pfx}-bt-serum`,text:'Hair serum on scalp'},
-        {id:`${pfx}-bt-vits`,text:'Vitamins'},
-        {id:`${pfx}-bt-lotion`,text:'Hand lotion'},
+        {id:pfx+'-teeth',text:'Brush teeth'},
+        {id:pfx+'-skin',text:'PM skincare'},
+        {id:pfx+'-meds',text:'Meds'},
+        {id:pfx+'-deo',text:'Deodorant'},
+        {id:pfx+'-serum',text:'Hair serum on scalp'},
+        {id:pfx+'-vits',text:'Vitamins'},
+        {id:pfx+'-lotion',text:'Hand lotion'}
       ];
     }
     return[];
   }
 
-  return(
-    <div style={{fontFamily:GEO,color:P.ink,background:P.sand,width:'100%',minHeight:'100vh',display:'flex',flexDirection:'column'}}>
+  return React.createElement('div',{style:{fontFamily:GEO,color:P.ink,background:P.sand,width:'100%',minHeight:'100vh',display:'flex',flexDirection:'column'}},
 
-      {/* TAB BAR */}
-      <div style={{background:P.ash,display:'flex',paddingTop:'env(safe-area-inset-top,0px)',position:'sticky',top:0,zIndex:30,borderBottom:`1px solid ${P.ashBorder}`}}>
-        {['Hello','Blocks','Tasks','Delights'].map((label,i)=>(
-          <button key={label} onClick={()=>setTab(i)} style={{
-            flex:1,padding:'11px 0',background:'none',border:'none',
-            borderRight:i<3?`1px solid ${P.ashBorder}`:'none',
-            borderBottom:tab===i?`2px solid ${P.poppy}`:'2px solid transparent',
-            fontFamily:CP,fontSize:11,letterSpacing:'0.08em',cursor:'pointer',
-            color:tab===i?P.sand2:'#9A8A5A',borderRadius:0,position:'relative',
-          }}>
-            {label}
-            {label==='Tasks'&&highPriOpen.length>0&&(
-              <span style={{position:'absolute',top:7,right:'15%',width:6,height:6,borderRadius:'50%',background:P.poppy,border:`1px solid ${P.ash}`}}/>
-            )}
-          </button>
-        ))}
-      </div>
+    // TAB BAR
+    React.createElement('div',{style:{background:P.ash,display:'flex',paddingTop:'env(safe-area-inset-top,0px)',position:'sticky',top:0,zIndex:30,borderBottom:'1px solid '+P.ashBorder}},
+      ['Hello','Blocks','Tasks','Delights'].map(function(label,i){
+        return React.createElement('button',{key:label,onClick:function(){setTab(i);},style:{flex:1,padding:'11px 0',background:'none',border:'none',borderRight:i<3?'1px solid '+P.ashBorder:'none',borderBottom:tab===i?'2px solid '+P.poppy:'2px solid transparent',fontFamily:CP,fontSize:11,letterSpacing:'0.08em',cursor:'pointer',color:tab===i?P.sand2:'#9A8A5A',borderRadius:0,position:'relative'}},
+          label,
+          label==='Tasks'&&highPriOpen.length>0?React.createElement('span',{style:{position:'absolute',top:7,right:'15%',width:6,height:6,borderRadius:'50%',background:P.poppy,border:'1px solid '+P.ash}}):null
+        );
+      })
+    ),
 
-      {/* SCREENS */}
-      <div style={{flex:1}}>
+    // SCREENS
+    React.createElement('div',{style:{flex:1}},
 
-        {/* HELLO */}
-        {tab===0&&(
-          <div style={{padding:'26px 18px 40px',backgroundImage:`linear-gradient(rgba(214,83,63,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(214,83,63,0.07) 1px,transparent 1px)`,backgroundSize:'22px 22px',backgroundColor:P.sand}}>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:7}}>{fmtDate(viewDate)}</div>
-            <div style={{fontSize:27,fontStyle:'italic',lineHeight:1.2,marginBottom:24}}>Hello,<br/>Brittany.</div>
+      // HELLO
+      tab===0?React.createElement('div',{style:{padding:'26px 18px 40px',backgroundImage:'linear-gradient(rgba(214,83,63,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(214,83,63,0.07) 1px,transparent 1px)',backgroundSize:'22px 22px',backgroundColor:P.sand}},
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:7}},fmtDate(viewDate)),
+        React.createElement('div',{style:{fontSize:27,fontStyle:'italic',lineHeight:1.2,marginBottom:24}},'Hello,',React.createElement('br'),'Brittany.'),
+        React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+P.border,padding:'20px 18px',marginBottom:14}},
+          React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:13}},'A note —'),
+          React.createElement('div',{style:{fontSize:14,lineHeight:1.8}},
+            React.createElement('div',{style:{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}},dayNote),
+            tasksDueToday.length>0?React.createElement('div',{style:{marginBottom:10}},
+              React.createElement('span',null,'⚠️ '),
+              tasksDueToday.length===1?('Don\'t forget today: '+tasksDueToday[0].text):('You have '+tasksDueToday.length+' tasks due today.')
+            ):null,
+            isLastDayOfMonth?React.createElement('div',{style:{marginBottom:10}},'📅 Last day of the month — check your recurring tasks.'):null,
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}},
+              React.createElement('span',null,
+                React.createElement('span',null,'✏️ '),
+                React.createElement('strong',{style:{fontWeight:500}},submitted+' of 10'),
+                ' applications this week — ',jobLeft,' to go.'
+              ),
+              React.createElement('span',{onClick:incJob,style:{fontFamily:CP,fontSize:10,color:P.poppy,cursor:'pointer',border:'0.5px solid '+P.poppy,padding:'1px 8px'}},'+1')
+            ),
+            submitted>=10?React.createElement('div',{style:{color:P.grass,fontStyle:'italic',fontSize:13,marginTop:6}},'🎉 Weekly goal reached!'):null
+          )
+        ),
+        React.createElement(IntentionPrompt,{value:intention,onChange:setIntention})
+      ):null,
 
-            <div style={{background:P.sandCard,border:`0.5px solid ${P.border}`,padding:'20px 18px',marginBottom:14}}>
-              <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:13}}>A note —</div>
-              <div style={{fontSize:14,lineHeight:1.8}}>
-                {(()=>{const dow=viewDate.getDay();const dayNotes=['Rest up — it's Sunday.','New week, fresh start.','Deep focus day.','Midweek — keep the momentum.','Almost there.','Reset and recharge.','Enjoy the weekend.'];return <div style={{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}}>{dayNotes[dow]}</div>;})()}
-                {tasksDueToday.length>0&&(
-                  <div style={{marginBottom:10}}>
-                    ⚠️ {tasksDueToday.length===1
-                      ?`Don't forget today: ${tasksDueToday[0].text}`
-                      :`You have ${tasksDueToday.length} tasks due today.`}
-                  </div>
-                )}
-                {isLastDayOfMonth&&(
-                  <div style={{marginBottom:10}}>📅 Last day of the month — don't forget any recurring tasks.</div>
-                )}
-                <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                  <span>✏️ <strong style={{fontWeight:500}}>{submitted} of 10</strong> applications this week — {jobLeft} to go.</span>
-                  <span onClick={incJob} style={{fontFamily:CP,fontSize:10,color:P.poppy,cursor:'pointer',border:`0.5px solid ${P.poppy}`,padding:'1px 8px'}}>+1</span>
-                </div>
-                {submitted>=10&&<div style={{color:P.grass,fontStyle:'italic',fontSize:13,marginTop:6}}>🎉 Weekly goal reached!</div>}
-              </div>
-            </div>
+      // BLOCKS
+      tab===1?React.createElement('div',{style:{padding:'14px 14px 40px'}},
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:14,padding:'0 2px'}},fmtDate(viewDate)),
+        BLOCKS.map(function(block){
+          var isOpen=openBlock===block.id;
+          var items=buildBlockItems(block.id);
+          var doneCount=items.filter(function(item){return!!checks[item.id];}).length;
+          var nextWash=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
 
-            <IntentionPrompt value={intention} onChange={setIntention}/>
-          </div>
-        )}
+          return React.createElement('div',{key:block.id,style:{marginBottom:5,border:'0.5px solid '+block.border}},
+            React.createElement('div',{onClick:function(){toggleBlock(block.id);},style:{background:block.bg,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'15px 16px',cursor:'pointer'}},
+              React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:10}},
+                React.createElement('div',{style:{fontSize:21,fontWeight:500,color:block.txt}},block.label),
+                items.length>0?React.createElement('div',{style:{fontFamily:CP,fontSize:10,color:block.txt+'80'}},doneCount+'/'+items.length):null
+              ),
+              React.createElement('div',{style:{fontSize:16,color:block.txt+'80',fontWeight:'bold'}},isOpen?'v':'>')
+            ),
+            isOpen?React.createElement('div',{style:{background:P.sand,padding:'2px 16px 14px',borderTop:'0.5px solid '+block.border}},
+              items.length===0?React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}},
+                block.id==='leisure'?'Add items to your Delights list to get a nudge here.':'Nothing scheduled.'
+              ):null,
+              items.map(function(item,idx){
+                var done=!!checks[item.id];
+                var isLast=idx===items.length-1;
 
-        {/* BLOCKS */}
-        {tab===1&&(
-          <div style={{padding:'14px 14px 40px'}}>
-            <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:14,padding:'0 2px'}}>{fmtDate(viewDate)}</div>
-            {BLOCKS.map(block=>{
-              const isOpen=openBlock===block.id;
-              const items=blockItems(block.id);
-              const doneCount=items.filter(item=>!!checks[item.id]).length;
+                if(item.isHairWash){
+                  return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)'}},
+                    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:11,flex:1},onClick:function(){toggle(item.id);}},
+                      React.createElement(CkBox,{done:done,color:block.cht}),
+                      React.createElement('div',null,
+                        React.createElement('span',{style:{fontSize:13,textDecoration:done?'line-through':'none',opacity:done?0.4:1}},'Hair wash shower'),
+                        React.createElement('span',{style:{fontFamily:CP,fontSize:9,background:block.cht+'22',color:'#87332B',padding:'2px 7px',marginLeft:6}},HAIR[nextWash]?HAIR[nextWash].tag:'Wash A')
+                      )
+                    ),
+                    React.createElement('div',{onClick:function(){setHairSheet(true);},style:{padding:'4px 10px',cursor:'pointer',color:block.cht,fontSize:16,fontWeight:500}},'>>')
+                  );
+                }
 
-              return(
-                <div key={block.id} style={{marginBottom:5,border:`0.5px solid ${block.border}`}}>
-                  <div onClick={()=>toggleBlock(block.id)} style={{background:block.bg,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'15px 16px',cursor:'pointer'}}>
-                    <div style={{display:'flex',alignItems:'baseline',gap:10}}>
-                      <div style={{fontSize:21,fontWeight:500,color:block.txt}}>{block.label}</div>
-                      {items.length>0&&(
-                        <div style={{fontFamily:CP,fontSize:10,color:block.txt+'80'}}>{doneCount}/{items.length}</div>
-                      )}
-                    </div>
-                    <div style={{fontSize:16,color:block.txt+'80',fontWeight:'bold'}}>{isOpen?'∨':'›'}</div>
-                  </div>
+                if(item.isDelight){
+                  return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)',cursor:'pointer'},
+                    onClick:function(){
+                      if(!done){toggle(item.id);setTimeout(function(){toggle(item.id);},1400);}
+                    }},
+                    React.createElement(CkBox,{done:done,color:block.cht}),
+                    React.createElement('div',{style:{marginTop:1}},
+                      React.createElement('div',{style:{fontSize:13,fontStyle:'italic',color:block.border}},'✦ '+item.text),
+                      React.createElement('div',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginTop:2}},"tonight's nudge — refreshes each day")
+                    )
+                  );
+                }
 
-                  {isOpen&&(
-                    <div style={{background:P.sand,padding:'2px 16px 14px',borderTop:`0.5px solid ${block.border}`}}>
-                      {items.length===0&&(
-                        <div style={{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}}>
-                          {block.id==='leisure'?'Add items to your Delights list to get a nudge here.':'Nothing scheduled.'}
-                        </div>
-                      )}
-                      {items.map((item,idx)=>{
-                        const done=!!checks[item.id];
-                        const isLast=idx===items.length-1;
+                return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:toggle,isLast:isLast});
+              })
+            ):null
+          );
+        })
+      ):null,
 
-                        if(item.isHairWash){
-                          const nextWash=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
-                          return(
-                            <div key={item.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 0',borderBottom:isLast?'none':`0.5px solid rgba(58,42,26,0.1)`}}>
-                              <div style={{display:'flex',alignItems:'center',gap:11,flex:1}} onClick={()=>toggle(item.id)}>
-                                <CkBox done={done} color={block.cht}/>
-                                <div>
-                                  <span style={{fontSize:13,textDecoration:done?'line-through':'none',opacity:done?0.4:1}}>Hair wash shower</span>
-                                  <span style={{fontFamily:CP,fontSize:9,background:block.cht+'22',color:'#87332B',padding:'2px 7px',marginLeft:6}}>
-                                    {HAIR[nextWash]?.tag}
-                                  </span>
-                                </div>
-                              </div>
-                              <div onClick={()=>setHairSheet(true)} style={{padding:'4px 10px',cursor:'pointer',color:block.cht,fontSize:16,fontWeight:500}}>›</div>
-                            </div>
-                          );
-                        }
+      // TASKS
+      tab===2?React.createElement('div',{style:{padding:'14px 14px 40px'}},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          React.createElement('div',{style:{display:'flex',gap:3}},
+            [['all','All'],['work','Work'],['personal','Personal'],['leisure','Leisure']].map(function(item){
+              var v=item[0],l=item[1];
+              return React.createElement('button',{key:v,onClick:function(){setTaskFilter(v);},style:{fontFamily:CP,fontSize:9,padding:'3px 8px',cursor:'pointer',borderRadius:0,background:taskFilter===v?P.ash:'transparent',color:taskFilter===v?P.sand2:P.muted,border:'0.5px solid '+(taskFilter===v?P.ash:P.border)}},l);
+            })
+          ),
+          React.createElement('div',{style:{display:'flex',gap:3}},
+            [['priority','Priority'],['due','Due date']].map(function(item){
+              var v=item[0],l=item[1];
+              return React.createElement('button',{key:v,onClick:function(){setTaskSort(v);},style:{fontFamily:CP,fontSize:9,padding:'3px 8px',cursor:'pointer',borderRadius:0,background:'transparent',color:taskSort===v?P.poppy:P.muted,border:'0.5px solid '+(taskSort===v?P.poppy:P.border)}},l);
+            })
+          )
+        ),
+        React.createElement(AddTaskForm,{onAdd:addTask}),
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:5}},
+          filteredTasks.filter(function(t){return!t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});}),
+          filteredTasks.filter(function(t){return t.done;}).length>0?
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,margin:'14px 0 8px'}},'Done'),
+              React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:5}},
+                filteredTasks.filter(function(t){return t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});})
+              )
+            ):null,
+          filteredTasks.length===0?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontSize:14,fontStyle:'italic',marginTop:40,fontFamily:CP}},'No tasks yet. Add one above.'):null
+        )
+      ):null,
 
-                        if(item.isDelight){
-                          return(
-                            <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':`0.5px solid rgba(58,42,26,0.1)`,cursor:'pointer'}}
-                              onClick={()=>{
-                                if(!done){toggle(item.id);setTimeout(()=>toggle(item.id),1400);}
-                              }}>
-                              <CkBox done={done} color={block.cht}/>
-                              <div style={{marginTop:1}}>
-                                <div style={{fontSize:13,fontStyle:'italic',color:block.border}}>✦ {item.text}</div>
-                                <div style={{fontFamily:CP,fontSize:9,color:P.muted,marginTop:2}}>tonight's nudge — refreshes each day</div>
-                              </div>
-                            </div>
-                          );
-                        }
+      // DELIGHTS
+      tab===3?React.createElement('div',{style:{padding:'14px 14px 40px'}},
+        React.createElement('div',{style:{border:'0.5px solid '+P.border,overflow:'hidden',marginBottom:10}},
+          joyItems.map(function(item,idx){
+            var isNudge=item===todayDelight;
+            return React.createElement('div',{key:idx,style:{fontSize:13,padding:'11px 14px',borderBottom:idx<joyItems.length-1?'0.5px solid '+P.border:'none',display:'flex',gap:10,alignItems:'center',background:P.sandCard}},
+              React.createElement('div',{style:{width:4,height:4,background:isNudge?P.poppy:P.muted,flexShrink:0}}),
+              React.createElement('span',{style:{flex:1}},
+                item,
+                isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null
+              ),
+              React.createElement('button',{onClick:function(){setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
+            );
+          })
+        ),
+        React.createElement('div',{style:{border:'0.5px solid '+P.border,padding:'10px 12px',display:'flex',gap:8,alignItems:'center',background:P.sandCard}},
+          React.createElement('span',{style:{color:P.muted,fontSize:16}},'+'),
+          React.createElement('input',{value:newJoy,onChange:function(e){setNewJoy(e.target.value);},
+            onKeyDown:function(e){if(e.key==='Enter'&&newJoy.trim()){setJoyItems(function(prev){return prev.concat([newJoy.trim()]);});setNewJoy('');}},
+            placeholder:'Add something that brings you joy...',
+            style:{flex:1,fontFamily:GEO,fontSize:13,fontStyle:'italic',color:P.ink,WebkitTextFillColor:P.ink,border:'none',background:'transparent',outline:'none'}}),
+          React.createElement('button',{onClick:function(){if(!newJoy.trim())return;setJoyItems(function(prev){return prev.concat([newJoy.trim()]);});setNewJoy('');},style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'4px 10px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Add')
+        )
+      ):null
 
-                        return(
-                          <CheckRow key={item.id} id={item.id} text={item.text} note={item.note}
-                            color={block.cht} checks={checks} toggle={toggle} isLast={isLast}/>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+    ),
 
-        {/* TASKS */}
-        {tab===2&&(
-          <div style={{padding:'14px 14px 40px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style={{display:'flex',gap:3}}>
-                {[['all','All'],['work','Work'],['personal','Personal']].map(([v,l])=>(
-                  <button key={v} onClick={()=>setTaskFilter(v)} style={{
-                    fontFamily:CP,fontSize:9,padding:'3px 8px',cursor:'pointer',borderRadius:0,
-                    background:taskFilter===v?P.ash:'transparent',
-                    color:taskFilter===v?P.sand2:P.muted,
-                    border:taskFilter===v?`0.5px solid ${P.ash}`:`0.5px solid ${P.border}`,
-                  }}>{l}</button>
-                ))}
-              </div>
-              <div style={{display:'flex',gap:3}}>
-                {[['priority','Priority ↑'],['due','Due date']].map(([v,l])=>(
-                  <button key={v} onClick={()=>setTaskSort(v)} style={{
-                    fontFamily:CP,fontSize:9,padding:'3px 8px',cursor:'pointer',borderRadius:0,background:'transparent',
-                    color:taskSort===v?P.poppy:P.muted,
-                    border:taskSort===v?`0.5px solid ${P.poppy}`:`0.5px solid ${P.border}`,
-                  }}>{l}</button>
-                ))}
-              </div>
-            </div>
+    // FOOTER NAV
+    React.createElement('div',{style:{background:P.ash,display:'flex',borderTop:'1px solid '+P.ashBorder,position:'sticky',bottom:0,paddingBottom:'env(safe-area-inset-bottom,0px)'}},
+      React.createElement('button',{onClick:function(){setDayOffset(function(o){return Math.max(-2,o-1);});},style:{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:'1px solid '+P.ashBorder,fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}},'< Back'),
+      React.createElement('button',{onClick:function(){setDayOffset(0);},style:{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:'1px solid '+P.ashBorder,fontFamily:CP,fontSize:10,letterSpacing:'0.14em',textTransform:'uppercase',cursor:'pointer',color:isToday?P.poppy:'#9A8A5A',borderRadius:0}},'Today'),
+      React.createElement('button',{onClick:function(){setDayOffset(function(o){return Math.min(6,o+1);});},style:{flex:1,padding:'10px 0',background:'none',border:'none',fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}},'Next >')
+    ),
 
-            <AddTaskForm onAdd={addTask}/>
+    hairSheet?React.createElement(HairSheet,{onClose:function(){setHairSheet(false);},lastHairWash:lastHairWash,setLastHairWash:setLastHairWash}):null
 
-            <div style={{display:'flex',flexDirection:'column',gap:5}}>
-              {filteredTasks.filter(t=>!t.done).map(t=>(
-                <TaskCard key={t.id} task={t} onToggle={toggleTask} onDelete={deleteTask}/>
-              ))}
-              {filteredTasks.filter(t=>t.done).length>0&&(
-                <div>
-                  <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,margin:'14px 0 8px'}}>Done</div>
-                  <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                    {filteredTasks.filter(t=>t.done).map(t=>(
-                      <TaskCard key={t.id} task={t} onToggle={toggleTask} onDelete={deleteTask}/>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {filteredTasks.length===0&&(
-                <div style={{textAlign:'center',color:P.muted,fontSize:14,fontStyle:'italic',marginTop:40,fontFamily:CP}}>No tasks yet. Add one above.</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* DELIGHTS */}
-        {tab===3&&(
-          <div style={{padding:'14px 14px 40px'}}>
-            <div style={{border:`0.5px solid ${P.border}`,overflow:'hidden',marginBottom:10}}>
-              {joyItems.map((item,idx)=>{
-                const isNudge=item===todayDelight;
-                return(
-                  <div key={idx} style={{fontSize:13,padding:'11px 14px',borderBottom:idx<joyItems.length-1?`0.5px solid ${P.border}`:'none',display:'flex',gap:10,alignItems:'center',background:P.sandCard}}>
-                    <div style={{width:4,height:4,background:isNudge?P.poppy:P.muted,flexShrink:0}}/>
-                    <span style={{flex:1}}>
-                      {item}
-                      {isNudge&&<span style={{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}}>← today's nudge</span>}
-                    </span>
-                    <button onClick={()=>setJoyItems(prev=>prev.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}}>×</button>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{border:`0.5px solid ${P.border}`,padding:'10px 12px',display:'flex',gap:8,alignItems:'center',background:P.sandCard}}>
-              <span style={{color:P.muted,fontSize:16}}>+</span>
-              <input value={newJoy} onChange={e=>setNewJoy(e.target.value)}
-                onKeyDown={e=>{if(e.key==='Enter'&&newJoy.trim()){setJoyItems(prev=>[...prev,newJoy.trim()]);setNewJoy('');}}}
-                placeholder="Add something that brings you joy..."
-                style={{flex:1,fontFamily:GEO,fontSize:13,fontStyle:'italic',color:P.ink,WebkitTextFillColor:P.ink,border:'none',background:'transparent',outline:'none'}}
-              />
-              <button onClick={()=>{if(!newJoy.trim())return;setJoyItems(prev=>[...prev,newJoy.trim()]);setNewJoy('');}} style={{
-                background:P.poppy,color:'#FDF0E8',border:'none',padding:'4px 10px',fontFamily:CP,fontSize:10,cursor:'pointer',
-              }}>Add</button>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* FOOTER NAV */}
-      <div style={{background:P.ash,display:'flex',borderTop:`1px solid ${P.ashBorder}`,position:'sticky',bottom:0,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
-        <button onClick={()=>setDayOffset(o=>Math.max(-2,o-1))} style={{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:`1px solid ${P.ashBorder}`,fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}}>‹ Back</button>
-        <button onClick={()=>setDayOffset(0)} style={{flex:1,padding:'10px 0',background:'none',border:'none',borderRight:`1px solid ${P.ashBorder}`,fontFamily:CP,fontSize:10,letterSpacing:'0.14em',textTransform:'uppercase',cursor:'pointer',color:isToday?P.poppy:'#9A8A5A',borderRadius:0}}>Today</button>
-        <button onClick={()=>setDayOffset(o=>Math.min(6,o+1))} style={{flex:1,padding:'10px 0',background:'none',border:'none',fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}}>Next ›</button>
-      </div>
-
-      {hairSheet&&<HairSheet onClose={()=>setHairSheet(false)} lastHairWash={lastHairWash} setLastHairWash={setLastHairWash}/>}
-
-    </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
 </script>
 </body>
 </html>
