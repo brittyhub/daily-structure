@@ -13,7 +13,7 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body,#root{min-height:100%;background:#F5E8D5;}
+html,body,#root{min-height:100%;background:#5C4E16;}
 body{overscroll-behavior:none;}
 input,button{-webkit-appearance:none;border-radius:0;}
 input[type="date"]{-webkit-appearance:none;}
@@ -399,7 +399,7 @@ function App(){
     (async()=>{
       try{const r=await window.storage.get('ds-checks');if(r){const p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(_){}
       try{const r=await window.storage.get('ds-tasks');if(r)setTasks(JSON.parse(r.value));}catch(_){}
-      try{const r=await window.storage.get('ds-joy');if(r)setJoyItems(JSON.parse(r.value));}catch(_){}
+      try{const r=await window.storage.get('ds-joy');if(r){const parsed=JSON.parse(r.value);if(parsed.length>0&&typeof parsed[0]==='object'&&parsed[0].text){setJoyItems(parsed.map(function(i){return i.text;}));}else{setJoyItems(parsed);}}}catch(_){}
       try{const r=await window.storage.get('ds-intention');if(r){const p=JSON.parse(r.value);if(p.date===todayStr())setIntention(p.text||'');}}catch(_){}
       try{const r=await window.storage.get('ds-lasthairwash');if(r)setLastHairWash(r.value);}catch(_){}
       try{const r=await window.storage.get('ds-jobcount');if(r){const p=JSON.parse(r.value);if(p.week===getWeekKey())setJobCount(p);}}catch(_){}
@@ -457,7 +457,8 @@ function App(){
         {id:`${pfx}-workout`,text:'Workout — treadmill or hoop'},
         isHairWashDay
           ?{id:`${pfx}-hair`,text:'Hair wash shower',isHairWash:true}
-          :{id:`${pfx}-shower`,text:'Shower + dry + get dressed'},
+          :{id:`${pfx}-shower`,text:'Shower'},
+        {id:`${pfx}-lotion`,text:'Lotion + body care'},
         {id:`${pfx}-bfast`,text:'Eat a healthy breakfast'},
         {id:`${pfx}-vits`,text:'Vitamins'},
         {id:`${pfx}-water`,text:'First bottle of water'},
@@ -496,7 +497,7 @@ function App(){
   }
 
   return(
-    <div style={{fontFamily:GEO,color:P.ink,background:P.sand,maxWidth:390,margin:'0 auto',minHeight:'100vh',display:'flex',flexDirection:'column'}}>
+    <div style={{fontFamily:GEO,color:P.ink,background:P.sand,width:'100%',minHeight:'100vh',display:'flex',flexDirection:'column'}}>
 
       {/* TAB BAR */}
       <div style={{background:P.ash,display:'flex',paddingTop:'env(safe-area-inset-top,0px)',position:'sticky',top:0,zIndex:30,borderBottom:`1px solid ${P.ashBorder}`}}>
@@ -528,6 +529,7 @@ function App(){
             <div style={{background:P.sandCard,border:`0.5px solid ${P.border}`,padding:'20px 18px',marginBottom:14}}>
               <div style={{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:13}}>A note —</div>
               <div style={{fontSize:14,lineHeight:1.8}}>
+                {(()=>{const dow=viewDate.getDay();const dayNotes=['Rest up — it's Sunday.','New week, fresh start.','Deep focus day.','Midweek — keep the momentum.','Almost there.','Reset and recharge.','Enjoy the weekend.'];return <div style={{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}}>{dayNotes[dow]}</div>;})()}
                 {tasksDueToday.length>0&&(
                   <div style={{marginBottom:10}}>
                     ⚠️ {tasksDueToday.length===1
