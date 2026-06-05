@@ -183,8 +183,8 @@ function CkBox(props){
 }
 
 function CheckRow(props){
-  var id=props.id,text=props.text,note=props.note,color=props.color,checks=props.checks,toggle=props.toggle,isLast=props.isLast;
-  var done=!!checks[id];
+  var id=props.id,text=props.text,note=props.note,color=props.color,checks=props.checks,toggle=props.toggle,isLast=props.isLast,forceDone=props.forceDone;
+  var done=forceDone!==null&&forceDone!==undefined?forceDone:!!checks[id];
   return React.createElement('div',{onClick:function(){toggle(id);},style:{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)',cursor:'pointer'}},
     React.createElement(CkBox,{done:done,color:color}),
     React.createElement('div',{style:{flex:1,marginTop:1}},
@@ -459,20 +459,20 @@ function App(){
     }
     if(blockId==='work'){
       var wt=tasks.filter(function(t){return!t.done&&t.type==='work';});
-      return[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}].concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text};}));
+      return[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}].concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text,taskId:t.id};}));
     }
     if(blockId==='life'){
       var pt=tasks.filter(function(t){return!t.done&&t.type==='personal'&&(t.dueDate===viewKey||!t.dueDate);});
-      return[{id:pfx+'-admin',text:'Life admin — pick one task to complete or advance'}].concat(pt.slice(0,4).map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
+      return[{id:pfx+'-admin',text:'Life admin — pick one task to complete or advance'}].concat(pt.slice(0,4).map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text,taskId:t.id};}));
     }
     if(blockId==='leisure'){
       var lt=tasks.filter(function(t){return!t.done&&t.type==='leisure'&&(t.dueDate===viewKey||!t.dueDate);});
       var base=[];
       if(todayDelight)base.push({id:pfx+'-delight',text:todayDelight,isDelight:true});
-      return base.concat(lt.map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text};}));
+      return base.concat(lt.map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text,taskId:t.id};}));
     }
     if(blockId==='bedtime'){
-      return[{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'PM skincare'},{id:pfx+'-meds',text:'Meds'},{id:pfx+'-deo',text:'Deodorant'},{id:pfx+'-serum',text:'Hair serum on scalp'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-lotion',text:'Hand lotion'}];
+      return[{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'PM skincare'},{id:pfx+'-meds',text:'Meds'},{id:pfx+'-deo',text:'Deodorant'},{id:pfx+'-serum',text:'Hair serum on scalp'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-lash',text:'Apply lash serum'},{id:pfx+'-lotion',text:'Hand lotion'}];
     }
     return[];
   }
@@ -558,7 +558,14 @@ function App(){
                     )
                   );
                 }
-                return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:toggle,isLast:isLast});
+                // For task-backed items, derive done from task state and sync on toggle
+                var itemDone=item.taskId
+                  ?(tasks.find(function(t){return t.id===item.taskId;})||{}).done||false
+                  :!!checks[item.id];
+                var itemToggle=item.taskId
+                  ?function(){toggleTask(item.taskId,!itemDone);}
+                  :function(){toggle(item.id);};
+                return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:function(){itemToggle();},isLast:isLast,forceDone:item.taskId?itemDone:null});
               })
             ):null
           );
