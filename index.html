@@ -355,6 +355,97 @@ function IntentionPrompt(props){
   );
 }
 
+
+function BulkAddModal(props){
+  var onClose=props.onClose,onAdd=props.onAdd;
+  var _text=React.useState(''),bulkText=_text[0],setBulkText=_text[1];
+  var _status=React.useState(''),status=_status[0],setStatus=_status[1];
+  var _saving=React.useState(false),saving=_saving[0],setSaving=_saving[1];
+
+  function parseTask(line){
+    var text=line.trim();
+    if(!text)return null;
+    var priority='mid',type='personal',dueDate=null,notes=null;
+    // extract tags
+    var highMatch=text.match(/\[high\]/i);
+    var midMatch=text.match(/\[mid\]/i);
+    var lowMatch=text.match(/\[low\]/i);
+    var workMatch=text.match(/\[work\]/i);
+    var leisureMatch=text.match(/\[leisure\]/i);
+    var dueMatch=text.match(/\[due:([\d-]+)\]/i);
+    var notesMatch=text.match(/\/\/(.+)$/);
+    if(highMatch)priority='high';
+    else if(lowMatch)priority='low';
+    else priority='mid';
+    if(workMatch)type='work';
+    else if(leisureMatch)type='leisure';
+    else type='personal';
+    if(dueMatch)dueDate=dueMatch[1];
+    if(notesMatch)notes=notesMatch[1].trim();
+    // clean text of all tags
+    text=text
+      .replace(/\[(high|mid|low|work|leisure|personal)\]/gi,'')
+      .replace(/\[due:[\d-]+\]/gi,'')
+      .replace(/\/\/.+$/,'')
+      .trim();
+    if(!text)return null;
+    return{text:text,priority:priority,type:type,dueDate:dueDate,notes:notes,done:false,recurring:'none',suggestedDay:dueDate?suggestDay(dueDate):null};
+  }
+
+  async function handleSubmit(){
+    var lines=bulkText.split('\n');
+    var tasks=lines.map(parseTask).filter(Boolean);
+    if(!tasks.length){setStatus('No tasks found — make sure each task is on its own line.');return;}
+    setSaving(true);
+    setStatus('Adding '+tasks.length+' tasks...');
+    try{
+      await Promise.all(tasks.map(function(t){return onAdd(t);}));
+      setStatus('✓ '+tasks.length+' tasks added!');
+      setBulkText('');
+      setTimeout(function(){onClose();},1200);
+    }catch(e){
+      setStatus('Something went wrong. Try again.');
+    }
+    setSaving(false);
+  }
+
+  return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:200}},
+    React.createElement('div',{onClick:onClose,style:{position:'absolute',inset:0,background:'rgba(58,42,26,0.55)'}}),
+    React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:P.sand,maxHeight:'90vh',overflowY:'auto'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',padding:'12px 0 4px'}},
+        React.createElement('div',{style:{width:36,height:4,background:P.border}})
+      ),
+      React.createElement('div',{style:{padding:'4px 20px 48px'}},
+        React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Bulk add tasks'),
+        React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:P.muted,marginBottom:14,lineHeight:1.6}},
+          'One task per line. Optional tags: [high] [mid] [low] [work] [leisure] [due:YYYY-MM-DD]'
+        ),
+        React.createElement('textarea',{
+          value:bulkText,
+          onChange:function(e){setBulkText(e.target.value);},
+          placeholder:'Book DC hotel [high] [due:2026-07-15]\nPack for DC trip [mid] [due:2026-07-17]\nOrganize vitamins [low]',
+          autoFocus:true,
+          style:{width:'100%',minHeight:220,fontFamily:GEO,fontSize:13,color:P.ink,WebkitTextFillColor:P.ink,
+            border:'0.5px solid '+P.border,background:P.sandCard,padding:'12px',
+            outline:'none',resize:'vertical',lineHeight:1.6,marginBottom:12}
+        }),
+        status?React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:status.startsWith('✓')?P.grass:P.muted,marginBottom:10}},status):null,
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:handleSubmit,disabled:saving,style:{
+            flex:1,background:saving?P.muted:P.poppy,color:'#FDF0E8',border:'none',
+            padding:'11px',fontFamily:CP,fontSize:12,cursor:saving?'default':'pointer',
+            letterSpacing:'0.06em',borderRadius:0
+          }},saving?'Adding...':'Add tasks'),
+          React.createElement('button',{onClick:onClose,style:{
+            background:'transparent',color:P.muted,border:'0.5px solid '+P.border,
+            padding:'11px 16px',fontFamily:CP,fontSize:12,cursor:'pointer',borderRadius:0
+          }},'Cancel')
+        )
+      )
+    )
+  );
+}
+
 function App(){
   var _tab=useState(0),tab=_tab[0],setTab=_tab[1];
   var _off=useState(0),dayOffset=_off[0],setDayOffset=_off[1];
@@ -373,6 +464,7 @@ function App(){
   var _ts=useState('priority'),taskSort=_ts[0],setTaskSort=_ts[1];
   var _ld=useState(false),loaded=_ld[0],setLoaded=_ld[1];
   var _sv=useState(false),saving=_sv[0],setSaving=_sv[1];
+  var _bulk=useState(false),showBulk=_bulk[0],setShowBulk=_bulk[1];
   var _err=useState(null),dbError=_err[0],setDbError=_err[1];
   var _dn=useState(''),dailyNote=_dn[0],setDailyNote=_dn[1];
 
@@ -601,6 +693,12 @@ function App(){
             })
           )
         ),
+        React.createElement('button',{
+          onClick:function(){setShowBulk(true);},
+          style:{width:'100%',background:'transparent',border:'0.5px solid '+P.border,
+            padding:'8px',fontFamily:CP,fontSize:10,cursor:'pointer',color:P.muted,
+            letterSpacing:'0.06em',marginBottom:8,borderRadius:0}
+        },'+ Bulk add tasks'),
         React.createElement(AddTaskForm,{onAdd:addTask,saving:saving}),
         !loaded?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontFamily:CP,fontSize:12,padding:'20px 0'}},'Loading tasks...'):null,
         loaded?React.createElement('div',null,
@@ -660,6 +758,10 @@ function App(){
       React.createElement('button',{onClick:function(){setDayOffset(function(o){return Math.min(6,o+1);});},style:{flex:1,padding:'10px 0',background:'none',border:'none',fontFamily:CP,fontSize:13,cursor:'pointer',color:P.grass,borderRadius:0}},'Next >')
     ),
 
+    showBulk?React.createElement(BulkAddModal,{
+      onClose:function(){setShowBulk(false);},
+      onAdd:addTask
+    }):null,
     hairSheet?React.createElement(HairSheet,{onClose:function(){setHairSheet(false);},lastHairWash:lastHairWash,setLastHairWash:setLastHairWash}):null
   );
 }
