@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Daily Structure">
+<link rel="manifest" href="/manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <title>Daily Structure</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -16,23 +17,21 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body,#root{min-height:100%;background:#5C4E16;}
 body{overscroll-behavior:none;}
-input,button{-webkit-appearance:none;border-radius:0;}
-input::placeholder{color:#A08A6A !important;-webkit-text-fill-color:#A08A6A !important;}
+input,button,textarea{-webkit-appearance:none;border-radius:0;}
+input::placeholder,textarea::placeholder{color:#A08A6A !important;-webkit-text-fill-color:#A08A6A !important;}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
-// Supabase client
-var SUPABASE_URL = 'https://zhwyktidhoxtqlzadixd.supabase.co';
-var SUPABASE_KEY = 'sb_publishable_qTPzN298G0S03qDUOXkK5g_l4wtgkxJ';
-var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// localStorage for non-task data (checks, joy, intention, etc.)
-window.storage = {
-  get: function(k){try{var v=localStorage.getItem('ds_'+k);if(v===null)return Promise.reject(new Error('nf'));return Promise.resolve({value:v});}catch(e){return Promise.reject(e);}},
-  set: function(k,v){try{localStorage.setItem('ds_'+k,typeof v==='string'?v:String(v));return Promise.resolve({key:k,value:v});}catch(e){return Promise.reject(e);}}
+var SUPABASE_URL='https://zhwyktidhoxtqlzadixd.supabase.co';
+var SUPABASE_KEY='sb_publishable_qTPzN298G0S03qDUOXkK5g_l4wtgkxJ';
+var db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+window.storage={
+  get:function(k){try{var v=localStorage.getItem('ds_'+k);if(v===null)return Promise.reject(new Error('nf'));return Promise.resolve({value:v});}catch(e){return Promise.reject(e);}},
+  set:function(k,v){try{localStorage.setItem('ds_'+k,typeof v==='string'?v:String(v));return Promise.resolve({key:k,value:v});}catch(e){return Promise.reject(e);}}
 };
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});}
 </script>
 <script type="text/babel">
 var useState=React.useState,useEffect=React.useEffect,useCallback=React.useCallback;
@@ -87,7 +86,6 @@ var DEFAULT_JOY=[
   'Find a book to start next — check your reading list',
   'Scan concert listings — anything worth proposing to Adam?',
   'Check saved restaurants or cafes you have been meaning to try',
-  'Find a fun local errand to attach to Friday outing',
   'Read one saved newsletter or Substack',
   'Text a friend you have been meaning to catch up with',
   'Browse a bookstore site — wishlisting only, no buying',
@@ -110,72 +108,61 @@ function getAutoBlock(){var h=new Date().getHours();if(h<10)return'morning';if(h
 function dailyDelight(items,offset){if(!items.length)return null;var d=addDays(new Date(),offset);var seed=parseInt(dateStr(d).replace(/-/g,''));var item=items[seed%items.length];return typeof item==='object'?item.text:item;}
 function suggestDay(due){if(!due)return null;var d=new Date(due+'T12:00:00');var dow=d.getDay();if(dow===1||dow===5)return null;var daysToFri=((5-dow+7)%7)||7;var fri=addDays(d,-daysToFri);if(fri>=new Date())return'Friday '+fri.toLocaleDateString('en-US',{month:'short',day:'numeric'});return null;}
 
-// Supabase task functions
+// Supabase functions
 async function fetchTasks(){
-  var res=await db.from('tasks').select('*').order('done',{ascending:true});
+  var res=await db.from('tasks').select('*').eq('archived',false).order('done',{ascending:true});
   if(res.error)throw res.error;
-  // normalize from db format to app format
-  return(res.data||[]).map(function(t){
-    return{
-      id:t.id,text:t.text,priority:t.priority||'mid',
-      type:t.type||'personal',dueDate:t.due_date||null,
-      notes:t.notes||null,done:t.done||false,
-      recurring:t.recurring||'none',suggestedDay:t.suggested_day||null
-    };
-  });
+  return(res.data||[]).map(function(t){return{id:t.id,text:t.text,priority:t.priority||'mid',type:t.type||'personal',dueDate:t.due_date||null,notes:t.notes||null,done:t.done||false,recurring:t.recurring||'none',suggestedDay:t.suggested_day||null,archived:t.archived||false};});
 }
-
+async function fetchArchivedTasks(){
+  var res=await db.from('tasks').select('*').eq('archived',true).order('done',{ascending:true});
+  if(res.error)throw res.error;
+  return(res.data||[]).map(function(t){return{id:t.id,text:t.text,priority:t.priority||'mid',type:t.type||'personal',dueDate:t.due_date||null,notes:t.notes||null,done:t.done||false,recurring:t.recurring||'none',suggestedDay:t.suggested_day||null,archived:true};});
+}
 async function saveTask(task){
-  var row={text:task.text,priority:task.priority,type:task.type,
-    due_date:task.dueDate||null,notes:task.notes||null,
-    done:task.done,recurring:task.recurring||'none',
-    suggested_day:task.suggestedDay||null};
-  if(task.id&&!task.id.startsWith('t')){
-    // existing uuid from db
-    var res=await db.from('tasks').update(row).eq('id',task.id);
-    if(res.error)throw res.error;
-  } else {
-    // new task - let db generate uuid
-    var res2=await db.from('tasks').insert([row]).select();
-    if(res2.error)throw res2.error;
-    return res2.data&&res2.data[0]?res2.data[0].id:task.id;
-  }
-  return task.id;
+  var row={text:task.text,priority:task.priority,type:task.type,due_date:task.dueDate||null,notes:task.notes||null,done:task.done,recurring:task.recurring||'none',suggested_day:task.suggestedDay||null,archived:false};
+  var res=await db.from('tasks').insert([row]).select();
+  if(res.error)throw res.error;
+  return res.data&&res.data[0]?res.data[0].id:task.id;
 }
-
+async function updateTask(id,fields){
+  var row={};
+  if(fields.text!==undefined)row.text=fields.text;
+  if(fields.priority!==undefined)row.priority=fields.priority;
+  if(fields.type!==undefined)row.type=fields.type;
+  if(fields.dueDate!==undefined)row.due_date=fields.dueDate||null;
+  if(fields.notes!==undefined)row.notes=fields.notes||null;
+  if(fields.done!==undefined)row.done=fields.done;
+  if(fields.archived!==undefined)row.archived=fields.archived;
+  if(fields.suggestedDay!==undefined)row.suggested_day=fields.suggestedDay||null;
+  var res=await db.from('tasks').update(row).eq('id',id);
+  if(res.error)throw res.error;
+}
 async function deleteTaskFromDb(id){
   var res=await db.from('tasks').delete().eq('id',id);
   if(res.error)throw res.error;
 }
-
-async function toggleTaskInDb(id,done){
-  var res=await db.from('tasks').update({done:done}).eq('id',id);
-  if(res.error)throw res.error;
-}
-
-// Supabase joy functions
 async function fetchJoyItems(){
   var res=await db.from('joy_items').select('*').order('created_at',{ascending:true});
   if(res.error)throw res.error;
   return(res.data||[]).map(function(j){return{id:j.id,text:j.text};});
 }
-
 async function addJoyItem(text){
   var res=await db.from('joy_items').insert([{text:text}]).select();
   if(res.error)throw res.error;
   return res.data&&res.data[0]?res.data[0].id:null;
 }
-
 async function deleteJoyItem(id){
   var res=await db.from('joy_items').delete().eq('id',id);
   if(res.error)throw res.error;
 }
-
-function Chk(){
-  return React.createElement('svg',{width:11,height:11,viewBox:'0 0 11 11'},
-    React.createElement('polyline',{points:'2,5.5 4.5,8 9,3',stroke:'#fff',strokeWidth:1.5,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'})
-  );
+async function fetchDailyNote(){
+  var res=await db.from('daily_note').select('*').limit(1);
+  if(res.error)throw res.error;
+  return res.data&&res.data[0]?res.data[0].note:'';
 }
+
+function Chk(){return React.createElement('svg',{width:11,height:11,viewBox:'0 0 11 11'},React.createElement('polyline',{points:'2,5.5 4.5,8 9,3',stroke:'#fff',strokeWidth:1.5,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'}));}
 
 function CkBox(props){
   var done=props.done,color=props.color,onClick=props.onClick;
@@ -203,9 +190,7 @@ function HairSheet(props){
   return React.createElement('div',{style:{position:'fixed',inset:0,zIndex:200}},
     React.createElement('div',{onClick:onClose,style:{position:'absolute',inset:0,background:'rgba(58,42,26,0.55)'}}),
     React.createElement('div',{style:{position:'absolute',bottom:0,left:0,right:0,background:P.sand,maxHeight:'86vh',overflowY:'auto'}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'center',padding:'12px 0 4px'}},
-        React.createElement('div',{style:{width:36,height:4,background:P.border}})
-      ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',padding:'12px 0 4px'}},React.createElement('div',{style:{width:36,height:4,background:P.border}})),
       React.createElement('div',{style:{padding:'4px 20px 48px'}},
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:14}},'Hair Wash Protocol'),
         React.createElement('div',{style:{display:'flex',gap:6,marginBottom:18}},
@@ -233,21 +218,56 @@ function HairSheet(props){
   );
 }
 
+// Task card with inline editing
 function TaskCard(props){
-  var task=props.task,onToggle=props.onToggle,onDelete=props.onDelete;
+  var task=props.task,onToggle=props.onToggle,onDelete=props.onDelete,onArchive=props.onArchive,onUpdate=props.onUpdate,isArchived=props.isArchived;
+  var _editing=useState(false),editing=_editing[0],setEditing=_editing[1];
+  var _draft=useState({}),draft=_draft[0],setDraft=_draft[1];
+
   var PC={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
   var pc=PC[task.priority||'mid'];
-  var overdue=task.dueDate&&task.dueDate<todayStr()&&!task.done;
+  var overdue=task.dueDate&&task.dueDate<todayStr()&&!task.done&&!isArchived;
   var pri=task.priority||'mid';
   var typeLabel=task.type==='work'?'Work':task.type==='leisure'?'Leisure':'Personal';
   var typeBg=task.type==='work'?'#E0DCC4':task.type==='leisure'?'#F0E0DA':'#E8D8C4';
   var typeColor=task.type==='work'?'#5A4F1A':task.type==='leisure'?'#5A2038':P.ash;
   var typeBorder=task.type==='work'?'#B8A870':task.type==='leisure'?'#C8A0B0':'#C8B080';
-  return React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+(overdue?P.poppy:P.border),padding:'11px 12px',opacity:task.done?0.5:1,marginBottom:5}},
+
+  function startEdit(){
+    setDraft({text:task.text,priority:task.priority||'mid',type:task.type||'personal',dueDate:task.dueDate||'',notes:task.notes||''});
+    setEditing(true);
+  }
+  function saveEdit(){
+    if(!draft.text||!draft.text.trim())return;
+    onUpdate(task.id,{text:draft.text.trim(),priority:draft.priority,type:draft.type,dueDate:draft.dueDate||null,notes:draft.notes||null,suggestedDay:draft.dueDate?suggestDay(draft.dueDate):null});
+    setEditing(false);
+  }
+
+  if(editing){
+    var PC2={high:{bg:'#F0D8D4',color:'#87332B',border:'#C8A090'},mid:{bg:'#E8D8C4',color:P.ash,border:'#C8B080'},low:{bg:'#E0DCC4',color:'#5A5030',border:'#B8A870'}};
+    return React.createElement('div',{style:{background:P.sandCard,border:'1.5px solid '+P.poppy,padding:'12px 12px',marginBottom:5}},
+      React.createElement('textarea',{value:draft.text||'',onChange:function(e){setDraft(Object.assign({},draft,{text:e.target.value}));},style:{width:'100%',fontFamily:GEO,fontSize:14,color:P.ink,WebkitTextFillColor:P.ink,border:'none',borderBottom:'0.5px solid '+P.border,background:'transparent',outline:'none',resize:'none',marginBottom:10,padding:'4px 0',lineHeight:1.4},rows:2}),
+      React.createElement('div',{style:{display:'flex',gap:4,marginBottom:8,flexWrap:'wrap'}},
+        ['high','mid','low'].map(function(p){return React.createElement('button',{key:p,onClick:function(){setDraft(Object.assign({},draft,{priority:p}));},style:{padding:'2px 8px',border:'0.5px solid '+(draft.priority===p?PC2[p].color:P.border),background:draft.priority===p?PC2[p].bg:'transparent',color:draft.priority===p?PC2[p].color:P.muted,fontFamily:CP,fontSize:9,cursor:'pointer',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));})
+      ),
+      React.createElement('div',{style:{display:'flex',gap:4,marginBottom:8}},
+        [['personal','Personal'],['work','Work'],['leisure','Leisure']].map(function(item){var v=item[0],l=item[1];return React.createElement('button',{key:v,onClick:function(){setDraft(Object.assign({},draft,{type:v}));},style:{padding:'2px 8px',border:'0.5px solid '+(draft.type===v?P.ash:P.border),background:draft.type===v?'#E8D8C4':'transparent',color:draft.type===v?P.ash:P.muted,fontFamily:CP,fontSize:9,cursor:'pointer',borderRadius:0}},l);})
+      ),
+      React.createElement('input',{type:'date',value:draft.dueDate||'',onChange:function(e){setDraft(Object.assign({},draft,{dueDate:e.target.value}));},style:{border:'0.5px solid '+P.border,padding:'3px 6px',fontFamily:CP,fontSize:11,background:'transparent',color:P.ink,outline:'none',borderRadius:0,marginBottom:8}}),
+      React.createElement('input',{value:draft.notes||'',onChange:function(e){setDraft(Object.assign({},draft,{notes:e.target.value}));},placeholder:'Notes...',style:{width:'100%',border:'none',borderBottom:'0.5px solid '+P.border,padding:'3px 0',fontFamily:GEO,fontSize:12,fontStyle:'italic',background:'transparent',color:P.ink,WebkitTextFillColor:P.ink,outline:'none',marginBottom:10}}),
+      React.createElement('div',{style:{display:'flex',gap:6}},
+        React.createElement('button',{onClick:saveEdit,style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'5px 14px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Save'),
+        React.createElement('button',{onClick:function(){setEditing(false);},style:{background:'transparent',color:P.muted,border:'0.5px solid '+P.border,padding:'5px 14px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Cancel')
+      )
+    );
+  }
+
+  return React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+(overdue?P.poppy:P.border),padding:'11px 12px',opacity:task.done?0.6:1,marginBottom:5}},
     React.createElement('div',{style:{display:'flex',gap:10,alignItems:'flex-start'}},
-      React.createElement(CkBox,{done:task.done,color:P.grass,onClick:function(){onToggle(task.id,!task.done);}}),
+      !isArchived?React.createElement(CkBox,{done:task.done,color:P.grass,onClick:function(){onToggle(task.id,!task.done);}}):
+        React.createElement('div',{style:{width:19,height:19,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:P.muted,fontSize:12}},'✓'),
       React.createElement('div',{style:{flex:1}},
-        React.createElement('div',{style:{fontSize:14,textDecoration:task.done?'line-through':'none',marginBottom:5,lineHeight:1.4}},task.text),
+        React.createElement('div',{style:{fontSize:14,textDecoration:task.done?'line-through':'none',marginBottom:5,lineHeight:1.4,color:isArchived?P.muted:P.ink}},task.text),
         React.createElement('div',{style:{display:'flex',gap:3,flexWrap:'wrap',alignItems:'center'}},
           React.createElement('span',{style:{fontFamily:CP,fontSize:9,padding:'2px 6px',background:pc.bg,color:pc.color,border:'0.5px solid '+pc.border}},pri.charAt(0).toUpperCase()+pri.slice(1)),
           task.dueDate?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:overdue?P.poppy:P.muted}},(overdue?'overdue — ':'due ')+new Date(task.dueDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})):null,
@@ -257,7 +277,12 @@ function TaskCard(props){
         ),
         task.notes?React.createElement('div',{style:{fontSize:12,color:P.muted,marginTop:4,fontStyle:'italic'}},task.notes):null
       ),
-      React.createElement('button',{onClick:function(){onDelete(task.id);},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:16,padding:'0 2px',flexShrink:0}},'x')
+      !isArchived?React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:4,flexShrink:0}},
+        React.createElement('button',{onClick:startEdit,style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:11,padding:'1px 4px',fontFamily:CP}},'edit'),
+        task.done?
+          React.createElement('button',{onClick:function(){onArchive(task.id);},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:11,padding:'1px 4px',fontFamily:CP}},'archive'):
+          React.createElement('button',{onClick:function(){onDelete(task.id);},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
+      ):React.createElement('button',{onClick:function(){onDelete(task.id);},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:11,padding:'1px 4px',fontFamily:CP,flexShrink:0}},'remove')
     )
   );
 }
@@ -275,9 +300,7 @@ function AddTaskForm(props){
 
   function submit(){
     if(!text.trim()||saving)return;
-    onAdd({text:text.trim(),priority:priority,type:type,dueDate:dueDate||null,
-      notes:notes.trim()||null,done:false,recurring:recurring,
-      suggestedDay:dueDate?suggestDay(dueDate):null});
+    onAdd({text:text.trim(),priority:priority,type:type,dueDate:dueDate||null,notes:notes.trim()||null,done:false,recurring:recurring,suggestedDay:dueDate?suggestDay(dueDate):null});
     setText('');setPriority('mid');setType('personal');setDueDate('');setNotes('');setRecurring('none');setOpen(false);
   }
 
@@ -289,18 +312,11 @@ function AddTaskForm(props){
     open?React.createElement('div',{style:{borderTop:'0.5px solid '+P.border,padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}},
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Priority'),
-        React.createElement('div',{style:{display:'flex',gap:4}},
-          ['high','mid','low'].map(function(p){return React.createElement('button',{key:p,onClick:function(){setPriority(p);},style:{padding:'3px 10px',border:'0.5px solid '+(priority===p?PC[p].color:P.border),background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));})
-        )
+        React.createElement('div',{style:{display:'flex',gap:4}},['high','mid','low'].map(function(p){return React.createElement('button',{key:p,onClick:function(){setPriority(p);},style:{padding:'3px 10px',border:'0.5px solid '+(priority===p?PC[p].color:P.border),background:priority===p?PC[p].bg:'transparent',color:priority===p?PC[p].color:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',fontWeight:priority===p?'bold':'normal',borderRadius:0}},p.charAt(0).toUpperCase()+p.slice(1));}))
       ),
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Type'),
-        React.createElement('div',{style:{display:'flex',gap:4}},
-          [['personal','Personal'],['work','Work'],['leisure','Leisure']].map(function(item){
-            var v=item[0],l=item[1];
-            return React.createElement('button',{key:v,onClick:function(){setType(v);},style:{padding:'3px 10px',border:'0.5px solid '+(type===v?P.ash:P.border),background:type===v?'#E8D8C4':'transparent',color:type===v?P.ash:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},l);
-          })
-        )
+        React.createElement('div',{style:{display:'flex',gap:4}},[['personal','Personal'],['work','Work'],['leisure','Leisure']].map(function(item){var v=item[0],l=item[1];return React.createElement('button',{key:v,onClick:function(){setType(v);},style:{padding:'3px 10px',border:'0.5px solid '+(type===v?P.ash:P.border),background:type===v?'#E8D8C4':'transparent',color:type===v?P.ash:P.muted,fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},l);}))
       ),
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Due date (optional)'),
@@ -308,12 +324,7 @@ function AddTaskForm(props){
       ),
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Recurring'),
-        React.createElement('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},
-          [['none','One-time'],['weekly','Weekly'],['monthly-last','Monthly — last day']].map(function(item){
-            var v=item[0],l=item[1];
-            return React.createElement('button',{key:v,onClick:function(){setRecurring(v);},style:{padding:'3px 8px',border:'0.5px solid '+(recurring===v?P.grass:P.border),background:recurring===v?'#E0DCC4':'transparent',color:recurring===v?'#5A4F1A':P.muted,fontFamily:CP,fontSize:9,cursor:'pointer',borderRadius:0}},l);
-          })
-        )
+        React.createElement('div',{style:{display:'flex',gap:4,flexWrap:'wrap'}},[['none','One-time'],['weekly','Weekly'],['monthly-last','Monthly — last day']].map(function(item){var v=item[0],l=item[1];return React.createElement('button',{key:v,onClick:function(){setRecurring(v);},style:{padding:'3px 8px',border:'0.5px solid '+(recurring===v?P.grass:P.border),background:recurring===v?'#E0DCC4':'transparent',color:recurring===v?'#5A4F1A':P.muted,fontFamily:CP,fontSize:9,cursor:'pointer',borderRadius:0}},l);}))
       ),
       React.createElement('div',null,
         React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.1em',textTransform:'uppercase',color:P.muted,marginBottom:6}},'Notes (optional)'),
@@ -338,10 +349,7 @@ function IntentionPrompt(props){
       ):
       React.createElement('div',{onClick:function(){setDraft(value||'');setEditing(true);},style:{cursor:'pointer'}},
         value?
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontSize:15,fontStyle:'italic',lineHeight:1.45,color:P.ink}},value),
-            React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:P.poppy,marginTop:6}},'edit')
-          ):
+          React.createElement('div',null,React.createElement('div',{style:{fontSize:15,fontStyle:'italic',lineHeight:1.45,color:P.ink}},value),React.createElement('div',{style:{fontFamily:CP,fontSize:11,color:P.poppy,marginTop:6}},'edit')):
           React.createElement('div',{style:{fontSize:14,fontStyle:'italic',color:P.muted}},"Tap to set today's intention...")
       )
   );
@@ -352,6 +360,8 @@ function App(){
   var _off=useState(0),dayOffset=_off[0],setDayOffset=_off[1];
   var _chk=useState({}),checks=_chk[0],setChecks=_chk[1];
   var _tasks=useState([]),tasks=_tasks[0],setTasks=_tasks[1];
+  var _arch=useState([]),archivedTasks=_arch[0],setArchivedTasks=_arch[1];
+  var _showArch=useState(false),showArchived=_showArch[0],setShowArchived=_showArch[1];
   var _joy=useState([]),joyItems=_joy[0],setJoyItems=_joy[1];
   var _nj=useState(''),newJoy=_nj[0],setNewJoy=_nj[1];
   var _int=useState(''),intention=_int[0],setIntention=_int[1];
@@ -364,45 +374,31 @@ function App(){
   var _ld=useState(false),loaded=_ld[0],setLoaded=_ld[1];
   var _sv=useState(false),saving=_sv[0],setSaving=_sv[1];
   var _err=useState(null),dbError=_err[0],setDbError=_err[1];
+  var _dn=useState(''),dailyNote=_dn[0],setDailyNote=_dn[1];
 
-  // Load tasks from Supabase + other data from localStorage
   useEffect(function(){
     (async function(){
-      // Tasks from Supabase
-      try{
-        var t=await fetchTasks();
-        setTasks(t);
-        setDbError(null);
-      }catch(e){
-        console.error('Supabase error:',e);
-        setDbError('Could not connect to database.');
-      }
-      // Everything else from localStorage
+      try{var t=await fetchTasks();setTasks(t);setDbError(null);}catch(e){setDbError('Could not connect to database.');}
+      try{var joyData=await fetchJoyItems();setJoyItems(joyData);}catch(e){}
+      try{var note=await fetchDailyNote();setDailyNote(note||'');}catch(e){}
       try{var r=await window.storage.get('ds-checks');if(r){var p=JSON.parse(r.value);if(p.date===todayStr())setChecks(p.checks||{});}}catch(e){}
-      try{
-        var joyData=await fetchJoyItems();
-        setJoyItems(joyData);
-      }catch(e){console.error('Joy load error:',e);}
       try{var r4=await window.storage.get('ds-intention');if(r4){var p4=JSON.parse(r4.value);if(p4.date===todayStr())setIntention(p4.text||'');}}catch(e){}
       try{var r5=await window.storage.get('ds-lasthairwash');if(r5)setLastHairWash(r5.value);}catch(e){}
       try{var r6=await window.storage.get('ds-jobcount');if(r6){var p6=JSON.parse(r6.value);if(p6.week===getWeekKey())setJobCount(p6);}}catch(e){}
       setLoaded(true);
     })();
-
-    // Auto-refresh tasks when app comes back to foreground
     function handleVisibility(){
       if(!document.hidden){
         fetchTasks().then(function(t){setTasks(t);}).catch(function(){});
         fetchJoyItems().then(function(j){setJoyItems(j);}).catch(function(){});
+        fetchDailyNote().then(function(n){setDailyNote(n||'');}).catch(function(){});
       }
     }
     document.addEventListener('visibilitychange',handleVisibility);
     return function(){document.removeEventListener('visibilitychange',handleVisibility);};
   },[]);
 
-  // Persist non-task data to localStorage
   useEffect(function(){if(!loaded)return;window.storage.set('ds-checks',JSON.stringify({date:todayStr(),checks:checks})).catch(function(){});},[checks,loaded]);
-  // Joy items now persisted in Supabase
   useEffect(function(){if(!loaded)return;window.storage.set('ds-intention',JSON.stringify({date:todayStr(),text:intention})).catch(function(){});},[intention,loaded]);
   useEffect(function(){if(!loaded)return;window.storage.set('ds-jobcount',JSON.stringify(jobCount)).catch(function(){});},[jobCount,loaded]);
 
@@ -410,25 +406,35 @@ function App(){
 
   async function addTask(taskData){
     setSaving(true);
-    try{
-      var newId=await saveTask(taskData);
-      var newTask=Object.assign({},taskData,{id:newId});
-      setTasks(function(prev){return[newTask].concat(prev);});
-    }catch(e){console.error('Save error:',e);}
+    try{var newId=await saveTask(taskData);var newTask=Object.assign({},taskData,{id:newId});setTasks(function(prev){return[newTask].concat(prev);});}
+    catch(e){console.error('Save error:',e);}
     setSaving(false);
   }
-
   async function toggleTask(id,done){
     setTasks(function(prev){return prev.map(function(t){return t.id===id?Object.assign({},t,{done:done}):t;});});
-    try{await toggleTaskInDb(id,done);}catch(e){console.error('Toggle error:',e);}
+    try{await updateTask(id,{done:done});}catch(e){console.error('Toggle error:',e);}
   }
-
   async function deleteTask(id){
     setTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});
+    setArchivedTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});
     try{await deleteTaskFromDb(id);}catch(e){console.error('Delete error:',e);}
   }
-
-  function toggleBlock(id){setOpenBlock(function(prev){return prev===id?null:id;});}
+  async function archiveTask(id){
+    setTasks(function(prev){return prev.filter(function(t){return t.id!==id;});});
+    try{await updateTask(id,{archived:true});}catch(e){console.error('Archive error:',e);}
+  }
+  async function archiveAllDone(){
+    var doneIds=tasks.filter(function(t){return t.done;}).map(function(t){return t.id;});
+    setTasks(function(prev){return prev.filter(function(t){return!t.done;});});
+    try{await Promise.all(doneIds.map(function(id){return updateTask(id,{archived:true});}));}catch(e){console.error('Archive all error:',e);}
+  }
+  async function loadArchived(){
+    try{var a=await fetchArchivedTasks();setArchivedTasks(a);}catch(e){console.error('Load archived error:',e);}
+  }
+  async function updateTaskData(id,fields){
+    setTasks(function(prev){return prev.map(function(t){if(t.id!==id)return t;return Object.assign({},t,fields);});});
+    try{await updateTask(id,fields);}catch(e){console.error('Update error:',e);}
+  }
   function incJob(){setJobCount(function(prev){return{week:getWeekKey(),count:prev.week===getWeekKey()?prev.count+1:1};});}
 
   var viewDate=addDays(new Date(),dayOffset);
@@ -436,6 +442,7 @@ function App(){
   var viewKey=dateStr(viewDate);
   var isToday=dayOffset===0;
   var isHairWashDay=viewDow===3||viewDow===5;
+  var isWeekend=viewDow===0||viewDow===6;
   var submitted=jobCount.week===getWeekKey()?jobCount.count:0;
   var jobLeft=Math.max(0,10-submitted);
   var tasksDueToday=tasks.filter(function(t){return!t.done&&t.dueDate===viewKey;});
@@ -451,6 +458,9 @@ function App(){
     return(a.dueDate||'9999').localeCompare(b.dueDate||'9999');
   });
 
+  var doneTasks=filteredTasks.filter(function(t){return t.done;});
+  var activeTasks=filteredTasks.filter(function(t){return!t.done;});
+
   function buildBlockItems(blockId){
     var pfx=viewKey+'-'+blockId;
     if(blockId==='morning'){
@@ -459,6 +469,9 @@ function App(){
     }
     if(blockId==='work'){
       var wt=tasks.filter(function(t){return!t.done&&t.type==='work';});
+      if(isWeekend){
+        return wt.length>0?wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text,taskId:t.id};}):[];
+      }
       return[{id:pfx+'-search',text:'Job search — triage new listings'},{id:pfx+'-app',text:'Submit one job application'}].concat(wt.map(function(t){return{id:pfx+'-wt-'+t.id,text:t.text,taskId:t.id};}));
     }
     if(blockId==='life'){
@@ -472,7 +485,7 @@ function App(){
       return base.concat(lt.map(function(t){return{id:pfx+'-lt-'+t.id,text:t.text,taskId:t.id};}));
     }
     if(blockId==='bedtime'){
-      return[{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'PM skincare'},{id:pfx+'-meds',text:'Meds'},{id:pfx+'-deo',text:'Deodorant'},{id:pfx+'-serum',text:'Hair serum on scalp'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-lash',text:'Apply lash serum'},{id:pfx+'-lotion',text:'Hand lotion'}];
+      return[{id:pfx+'-teeth',text:'Brush teeth'},{id:pfx+'-skin',text:'PM skincare'},{id:pfx+'-meds',text:'Meds'},{id:pfx+'-deo',text:'Deodorant'},{id:pfx+'-lash',text:'Apply lash serum'},{id:pfx+'-serum',text:'Hair serum on scalp'},{id:pfx+'-vits',text:'Vitamins'},{id:pfx+'-lotion',text:'Hand lotion'}];
     }
     return[];
   }
@@ -498,10 +511,10 @@ function App(){
         React.createElement('div',{style:{background:P.sandCard,border:'0.5px solid '+P.border,padding:'20px 18px',marginBottom:14}},
           React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.16em',textTransform:'uppercase',color:P.muted,marginBottom:13}},'A note —'),
           React.createElement('div',{style:{fontSize:14,lineHeight:1.8}},
-            React.createElement('div',{style:{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}},dayNote),
+            dailyNote?React.createElement('div',{style:{marginBottom:12,color:P.ink}},dailyNote):
+              React.createElement('div',{style:{marginBottom:10,color:P.muted,fontStyle:'italic',fontSize:13}},dayNote),
             tasksDueToday.length>0?React.createElement('div',{style:{marginBottom:10}},
-              React.createElement('span',null,'⚠️ '),
-              tasksDueToday.length===1?('Today: '+tasksDueToday[0].text):('You have '+tasksDueToday.length+' tasks due today.')
+              '⚠️ ',tasksDueToday.length===1?('Today: '+tasksDueToday[0].text):('You have '+tasksDueToday.length+' tasks due today.')
             ):null,
             isLastDayOfMonth?React.createElement('div',{style:{marginBottom:10}},'📅 Last day of the month — check recurring tasks.'):null,
             dbError?React.createElement('div',{style:{marginBottom:10,color:P.poppy,fontFamily:CP,fontSize:12}},'⚠ '+dbError):null,
@@ -521,22 +534,28 @@ function App(){
         BLOCKS.map(function(block){
           var isOpen=openBlock===block.id;
           var items=buildBlockItems(block.id);
-          var doneCount=items.filter(function(item){return!!checks[item.id];}).length;
+          var doneCount=items.filter(function(item){return item.taskId?(tasks.find(function(t){return t.id===item.taskId;})||{}).done||false:!!checks[item.id];}).length;
           var nextWash=lastHairWash==='A'?'B':lastHairWash==='B'?'A':'A';
           return React.createElement('div',{key:block.id,style:{marginBottom:5,border:'0.5px solid '+block.border}},
-            React.createElement('div',{onClick:function(){toggleBlock(block.id);},style:{background:block.bg,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'15px 16px',cursor:'pointer'}},
+            React.createElement('div',{onClick:function(){setOpenBlock(function(prev){return prev===block.id?null:block.id;});},style:{background:block.bg,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'15px 16px',cursor:'pointer'}},
               React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:10}},
                 React.createElement('div',{style:{fontSize:21,fontWeight:500,color:block.txt}},block.label),
-                items.length>0?React.createElement('div',{style:{fontFamily:CP,fontSize:10,color:block.txt+'80'}},doneCount+'/'+items.length):null
+                items.length>0?React.createElement('div',{style:{fontFamily:CP,fontSize:10,color:block.txt+'80'}},doneCount+'/'+items.length):
+                  isWeekend&&block.id==='work'?React.createElement('div',{style:{fontFamily:CP,fontSize:10,color:block.txt+'80'}},'rest day'):null
               ),
               React.createElement('div',{style:{fontSize:16,color:block.txt+'80',fontWeight:'bold'}},isOpen?'v':'>')
             ),
             isOpen?React.createElement('div',{style:{background:P.sand,padding:'2px 16px 14px',borderTop:'0.5px solid '+block.border}},
+              isWeekend&&block.id==='work'&&items.length===0?
+                React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}},'No work targets on weekends. Any work tasks you have added will appear here.'):
               items.length===0?React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',padding:'10px 0'}},block.id==='leisure'?'Add Leisure tasks or Delights to see them here.':'Nothing scheduled.'):null,
               items.map(function(item,idx){
-                var done=!!checks[item.id];
                 var isLast=idx===items.length-1;
+                var itemDone=item.taskId?(tasks.find(function(t){return t.id===item.taskId;})||{}).done||false:!!checks[item.id];
+                var itemToggle=item.taskId?function(){toggleTask(item.taskId,!itemDone);}:function(){toggle(item.id);};
+
                 if(item.isHairWash){
+                  var done=!!checks[item.id];
                   return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)'}},
                     React.createElement('div',{style:{display:'flex',alignItems:'center',gap:11,flex:1},onClick:function(){toggle(item.id);}},
                       React.createElement(CkBox,{done:done,color:block.cht}),
@@ -545,27 +564,21 @@ function App(){
                         React.createElement('span',{style:{fontFamily:CP,fontSize:9,background:block.cht+'22',color:'#87332B',padding:'2px 7px',marginLeft:6}},HAIR[nextWash]?HAIR[nextWash].tag:'Wash A')
                       )
                     ),
-                    React.createElement('div',{onClick:function(){setHairSheet(true);},style:{padding:'4px 10px',cursor:'pointer',color:block.cht,fontSize:16,fontWeight:500}},'>>')
+                    React.createElement('div',{onClick:function(){setHairSheet(true);},style:{padding:'4px 10px',cursor:'pointer',color:block.cht,fontSize:16,fontWeight:500}},'›')
                   );
                 }
                 if(item.isDelight){
+                  var dd=!!checks[item.id];
                   return React.createElement('div',{key:item.id,style:{display:'flex',alignItems:'flex-start',gap:11,padding:'9px 0',borderBottom:isLast?'none':'0.5px solid rgba(58,42,26,0.1)',cursor:'pointer'},
-                    onClick:function(){if(!done){toggle(item.id);setTimeout(function(){toggle(item.id);},1400);}}},
-                    React.createElement(CkBox,{done:done,color:block.cht}),
+                    onClick:function(){if(!dd){toggle(item.id);setTimeout(function(){toggle(item.id);},1400);}}},
+                    React.createElement(CkBox,{done:dd,color:block.cht}),
                     React.createElement('div',{style:{marginTop:1}},
                       React.createElement('div',{style:{fontSize:13,fontStyle:'italic',color:block.border}},'✦ '+item.text),
                       React.createElement('div',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginTop:2}},"tonight's nudge — refreshes each day")
                     )
                   );
                 }
-                // For task-backed items, derive done from task state and sync on toggle
-                var itemDone=item.taskId
-                  ?(tasks.find(function(t){return t.id===item.taskId;})||{}).done||false
-                  :!!checks[item.id];
-                var itemToggle=item.taskId
-                  ?function(){toggleTask(item.taskId,!itemDone);}
-                  :function(){toggle(item.id);};
-                return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:function(){itemToggle();},isLast:isLast,forceDone:item.taskId?itemDone:null});
+                return React.createElement(CheckRow,{key:item.id,id:item.id,text:item.text,note:item.note,color:block.cht,checks:checks,toggle:itemToggle,isLast:isLast,forceDone:item.taskId?itemDone:null});
               })
             ):null
           );
@@ -591,13 +604,28 @@ function App(){
         React.createElement(AddTaskForm,{onAdd:addTask,saving:saving}),
         !loaded?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontFamily:CP,fontSize:12,padding:'20px 0'}},'Loading tasks...'):null,
         loaded?React.createElement('div',null,
-          filteredTasks.filter(function(t){return!t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});}),
-          filteredTasks.filter(function(t){return t.done;}).length>0?
-            React.createElement('div',null,
-              React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted,margin:'14px 0 8px'}},'Done'),
-              filteredTasks.filter(function(t){return t.done;}).map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask});})
+          activeTasks.map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask,onArchive:archiveTask,onUpdate:updateTaskData});}),
+          doneTasks.length>0?React.createElement('div',null,
+            React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',margin:'14px 0 8px'}},
+              React.createElement('div',{style:{fontFamily:CP,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:P.muted}},'Done ('+doneTasks.length+')'),
+              React.createElement('button',{onClick:archiveAllDone,style:{fontFamily:CP,fontSize:9,color:P.muted,background:'transparent',border:'0.5px solid '+P.border,padding:'2px 8px',cursor:'pointer',borderRadius:0}},'Archive all')
+            ),
+            doneTasks.map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:toggleTask,onDelete:deleteTask,onArchive:archiveTask,onUpdate:updateTaskData});})
+          ):null,
+          activeTasks.length===0&&doneTasks.length===0?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontSize:14,fontStyle:'italic',marginTop:40,fontFamily:CP}},'No tasks yet. Add one above.'):null,
+          React.createElement('div',{style:{marginTop:16,borderTop:'0.5px solid '+P.border,paddingTop:12}},
+            React.createElement('button',{
+              onClick:function(){
+                if(!showArchived){loadArchived();}
+                setShowArchived(function(s){return!s;});
+              },
+              style:{fontFamily:CP,fontSize:10,color:P.muted,background:'transparent',border:'none',cursor:'pointer',padding:0,letterSpacing:'0.06em'}
+            },showArchived?'▴ Hide archived':'▾ View archived ('+archivedTasks.length+')'),
+            showArchived&&archivedTasks.length>0?React.createElement('div',{style:{marginTop:10}},
+              archivedTasks.map(function(t){return React.createElement(TaskCard,{key:t.id,task:t,onToggle:function(){},onDelete:deleteTask,onArchive:function(){},onUpdate:function(){},isArchived:true});})
             ):null,
-          filteredTasks.length===0?React.createElement('div',{style:{textAlign:'center',color:P.muted,fontSize:14,fontStyle:'italic',marginTop:40,fontFamily:CP}},'No tasks yet. Add one above.'):null
+            showArchived&&archivedTasks.length===0?React.createElement('div',{style:{fontFamily:CP,fontSize:12,color:P.muted,fontStyle:'italic',marginTop:8}},'No archived tasks yet.'):null
+          )
         ):null
       ):null,
 
@@ -605,11 +633,12 @@ function App(){
       tab===3?React.createElement('div',{style:{padding:'14px 14px 40px'}},
         React.createElement('div',{style:{border:'0.5px solid '+P.border,overflow:'hidden',marginBottom:10}},
           joyItems.map(function(item,idx){
-            var itemText=typeof item==='object'?item.text:item;var isNudge=itemText===todayDelight;
+            var itemText=typeof item==='object'?item.text:item;
+            var isNudge=itemText===todayDelight;
             return React.createElement('div',{key:idx,style:{fontSize:13,padding:'11px 14px',borderBottom:idx<joyItems.length-1?'0.5px solid '+P.border:'none',display:'flex',gap:10,alignItems:'center',background:P.sandCard}},
               React.createElement('div',{style:{width:4,height:4,background:isNudge?P.poppy:P.muted,flexShrink:0}}),
-              React.createElement('span',{style:{flex:1}},typeof item==='object'?item.text:item,isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null),
-              React.createElement('button',{onClick:async function(){var itemId=typeof item==='object'?item.id:null;setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});if(itemId){try{await deleteJoyItem(itemId);}catch(e){console.error('Delete joy error:',e);}}},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
+              React.createElement('span',{style:{flex:1}},itemText,isNudge?React.createElement('span',{style:{fontFamily:CP,fontSize:9,color:P.muted,marginLeft:8}},"← today's nudge"):null),
+              React.createElement('button',{onClick:async function(){var itemId=typeof item==='object'?item.id:null;setJoyItems(function(prev){return prev.filter(function(_,i){return i!==idx;});});if(itemId){try{await deleteJoyItem(itemId);}catch(e){}}},style:{background:'none',border:'none',color:P.muted,cursor:'pointer',fontSize:15,padding:'0 2px'}},'x')
             );
           })
         ),
@@ -622,7 +651,6 @@ function App(){
           React.createElement('button',{onClick:async function(){if(!newJoy.trim())return;var t=newJoy.trim();setNewJoy('');try{var newId=await addJoyItem(t);setJoyItems(function(prev){return prev.concat([{id:newId,text:t}]);});}catch(e){console.error('Add joy error:',e);}},style:{background:P.poppy,color:'#FDF0E8',border:'none',padding:'4px 10px',fontFamily:CP,fontSize:10,cursor:'pointer',borderRadius:0}},'Add')
         )
       ):null
-
     ),
 
     // FOOTER
